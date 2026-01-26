@@ -1,6 +1,7 @@
 # ================= CATVERSE BOT FULL =================
 import os
-import random, time
+import random
+import time
 from datetime import datetime, timedelta
 
 from pymongo import MongoClient
@@ -14,8 +15,8 @@ from telegram.ext import (
 )
 
 # ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")        # Set in Rail environment variables
-MONGO_URI = os.getenv("MONGO_URI")        # Set in Rail environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")        # Set in Railway environment variables
+MONGO_URI = os.getenv("MONGO_URI")        # Set in Railway environment variables
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
