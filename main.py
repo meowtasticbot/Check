@@ -1,4 +1,5 @@
 # ================= CATVERSE BOT FULL =================
+import os
 import random, time
 from datetime import datetime, timedelta
 
