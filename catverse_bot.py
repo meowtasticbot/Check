@@ -240,38 +240,75 @@ async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type == "private":
         return await update.message.reply_text("❌ Rob works in groups only.")
-    if not update.message.reply_to_message or not context.args:
-        return await update.message.reply_text("❗ Usage: Reply with /rob <amount>")
-    thief = get_cat(update.effective_user)
-    victim_user = update.message.reply_to_message.from_user
-    if victim_user.is_bot:
-        return await update.message.reply_text("🤖 Cannot rob a bot!")
-    victim = get_cat(victim_user)
-    amount = int(context.args[0])
+
+    if not update.message.reply_to_message:
+        return await update.message.reply_text("❗ Reply to a cat and use /rob <amount>")
+
+    # Safe amount parsing
+    try:
+        amount = int(context.args[0])
+    except (IndexError, ValueError):
+        return await update.message.reply_text("💸 Use like: /rob 400")
+
     if amount <= 0:
         return await update.message.reply_text("😂 Don't try to be over smart")
+
+    thief = get_cat(update.effective_user)
+    victim_user = update.message.reply_to_message.from_user
+
+    # Can't rob yourself
+    if victim_user.id == update.effective_user.id:
+        return await update.message.reply_text("🙀 You can't rob yourself, silly cat!")
+
+    # If someone tries to rob THIS bot
+    if victim_user.id == context.bot.id:
+        return await update.message.reply_text("😹 You tried to rob the Catverse gods… They stole YOUR milk instead!")
+
+    # Can't rob other bots
+    if victim_user.is_bot:
+        return await update.message.reply_text("🤖 That’s a robot cat… no coins to steal!")
+
+    victim = get_cat(victim_user)
+
+    # Protection check
     if is_protected(victim) or victim["inventory"].get("shield", 0) > 0:
-        return await update.message.reply_text("🛡 Cat is protected!")
+        return await update.message.reply_text("🛡 This cat is protected by a magic shield!")
+
     now = time.time()
     last = thief["last_rob"].get(str(victim["_id"]), 0)
     if now - last < 600:
-        return await update.message.reply_text("⏳ Already robbed this cat recently!")
+        return await update.message.reply_text("⏳ You already tried robbing this cat recently!")
+
     fail_chance = 30 + thief.get("wanted", 0) * 5
+
     if thief["inventory"].get("luck_boost", 0) > 0:
         fail_chance -= 15
         thief["inventory"]["luck_boost"] -= 1
+
+    # Rob fail
     if random.randint(1, 100) <= fail_chance:
         thief["wanted"] += 1
         cats.update_one({"_id": thief["_id"]}, {"$set": thief})
-        return await update.message.reply_text("😿 Rob failed!")
+        return await update.message.reply_text(f"🚨 {update.effective_user.mention_html()} got caught trying to rob!", parse_mode="HTML")
+
+    # Successful rob
     steal = min(amount, victim["coins"])
+    if steal <= 0:
+        return await update.message.reply_text("😿 That cat is broke!")
+
     victim["coins"] -= steal
     thief["coins"] += steal
     thief["wanted"] += 1
     thief["last_rob"][str(victim["_id"])] = now
+
     cats.update_one({"_id": thief["_id"]}, {"$set": thief})
     cats.update_one({"_id": victim["_id"]}, {"$set": victim})
-    await update.message.reply_text(f"😼 Successfully robbed {steal} coins!")
+
+    await update.message.reply_text(
+        f"😼 {update.effective_user.mention_html()} successfully robbed "
+        f"{victim_user.mention_html()} for 💰 {steal} coins!",
+        parse_mode="HTML"
+    )
 
 # ================= KILL =================
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
