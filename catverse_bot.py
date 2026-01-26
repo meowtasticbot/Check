@@ -1,20 +1,20 @@
 import os
 import random
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 
 from pymongo import MongoClient
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
     MessageHandler,
-    CallbackQueryHandler,
     ContextTypes,
     filters,
 )
 
 # ================= CONFIG =================
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI")
 
@@ -24,37 +24,39 @@ cats = db["cats"]
 global_state = db["global"]
 
 # ================= LEVELS =================
+
 LEVELS = [
     ("🐱 Kitten", 0),
-    ("😺 Teen", 30),
-    ("😼 Rogue", 60),
-    ("🐯 Alpha", 100),
-    ("👑 Legend", 160),
+    ("😺 Teen Cat", 30),
+    ("😼 Rogue Cat", 60),
+    ("🐯 Alpha Cat", 100),
+    ("👑 Legend Cat", 160),
 ]
 
-# ================= HELPERS =================
+# ================= DATABASE =================
+
 def get_cat(user):
     cat = cats.find_one({"_id": user.id})
     if not cat:
         cat = {
             "_id": user.id,
             "name": user.first_name,
-            "coins": 500,
+            "coins": 1000,
             "fish": 2,
             "xp": 0,
             "kills": 0,
-            "premium": False,
+            "deaths": 0,
+            "premium": True,
             "inventory": {"fish_bait": 0, "shield": 0},
             "dna": {"aggression": 1, "intelligence": 1, "luck": 1, "charm": 1},
             "level": "🐱 Kitten",
             "last_msg": 0,
             "protected_until": None,
             "last_daily": None,
-            "created": datetime.utcnow()
+            "created": datetime.now(UTC)
         }
         cats.insert_one(cat)
     return cat
-
 
 def evolve(cat):
     total = sum(cat["dna"].values())
@@ -63,11 +65,12 @@ def evolve(cat):
             cat["level"] = name
             break
 
+def is_protected(cat):
+    return cat.get("protected_until") and cat["protected_until"] > datetime.now(UTC)
 
 def dark_night_active():
     state = global_state.find_one({"_id": "dark"})
-    return state and state["until"] > datetime.utcnow()
-
+    return state and state["until"] > datetime.now(UTC)
 
 def calculate_global_rank(user_id):
     all_cats = list(cats.find().sort("coins", -1))
@@ -76,8 +79,8 @@ def calculate_global_rank(user_id):
             return idx
     return 0
 
+# ================= PASSIVE CHAT XP =================
 
-# ================= CHAT GAME LOOP =================
 async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
@@ -91,6 +94,7 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cat["last_msg"] = now
     cat["xp"] += random.randint(1, 3)
+
     stat = random.choice(list(cat["dna"]))
     cat["dna"][stat] += 1
 
@@ -98,26 +102,24 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     evolve(cat)
 
     if old_level != cat["level"]:
-        await update.message.reply_text(f"✨ EVOLVED! You are now {cat['level']} 😼")
+        await update.message.reply_text(f"✨ Your cat evolved into {cat['level']}!")
 
-    # Fish event
     if random.random() < 0.05:
         context.chat_data["fish_event"] = True
-        await update.message.reply_text("🐟 A glowing fish appeared!\nType: eat | save | share")
+        await update.message.reply_text("🐟 A magic fish appeared! Type: eat | save | share")
 
-    # Dark night
     if random.random() < 0.01 and not dark_night_active():
         global_state.update_one(
             {"_id": "dark"},
-            {"$set": {"until": datetime.utcnow() + timedelta(minutes=5)}},
+            {"$set": {"until": datetime.now(UTC) + timedelta(minutes=5)}},
             upsert=True
         )
-        await update.message.reply_text("🌑 DARK NIGHT HAS FALLEN! Rare boosts active 👑")
+        await update.message.reply_text("🌑 DARK NIGHT EVENT STARTED! Rare bonuses active!")
 
     cats.update_one({"_id": user.id}, {"$set": cat})
 
+# ================= FISH EVENT =================
 
-# ================= FISH ACTION =================
 async def fish_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.chat_data.get("fish_event"):
         return
@@ -128,13 +130,13 @@ async def fish_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if "eat" in text:
         cat["fish"] += 2
         cat["dna"]["aggression"] += 1
-        msg = "😻 You ate the fish. Power up!"
+        msg = "😻 You ate the fish and feel stronger!"
     elif "save" in text:
         cat["dna"]["intelligence"] += 2
-        msg = "🧠 Smart choice. Brain boosted."
+        msg = "🧠 You studied the fish. Intelligence up!"
     elif "share" in text:
         cat["dna"]["charm"] += 2
-        msg = "💖 Shared fish. Charm increased."
+        msg = "💖 You shared the fish. Charm increased!"
     else:
         return
 
@@ -143,125 +145,159 @@ async def fish_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
     await update.message.reply_text(msg)
 
+# ================= ECONOMY =================
 
-# ================= INVENTORY =================
-async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
-    inv = cat["inventory"]
+    now = datetime.now(UTC)
+
+    if cat.get("last_daily") and now - cat["last_daily"] < timedelta(hours=24):
+        return await update.message.reply_text("⏳ Your cat already collected daily fish today!")
+
+    reward = 2000 if cat["premium"] else 1000
+    cat["coins"] += reward
+    cat["last_daily"] = now
+
+    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+    await update.message.reply_text(f"🎁 Daily reward claimed: {reward} coins!")
+
+async def bal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat = get_cat(update.effective_user)
+    await update.message.reply_text(f"💰 Cat Coins: {cat['coins']}")
+
+async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.reply_to_message or not context.args:
+        return await update.message.reply_text("Reply to a cat and type amount.")
+
+    sender = get_cat(update.effective_user)
+    receiver = get_cat(update.message.reply_to_message.from_user)
+
+    amount = int(context.args[0])
+    tax = 0.05
+    final = int(amount * (1 - tax))
+
+    if sender["coins"] < amount:
+        return await update.message.reply_text("Not enough coins.")
+
+    sender["coins"] -= amount
+    receiver["coins"] += final
+
+    cats.update_one({"_id": sender["_id"]}, {"$set": sender})
+    cats.update_one({"_id": receiver["_id"]}, {"$set": receiver})
+
+    await update.message.reply_text(f"🐾 You gifted {final} coins after cat tax!")
+
+async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.reply_to_message:
+        return await update.message.reply_text("Reply to rob a cat.")
+
+    thief = get_cat(update.effective_user)
+    victim_user = update.message.reply_to_message.from_user
+    victim = get_cat(victim_user)
+
+    if is_protected(victim):
+        return await update.message.reply_text("🛡 That cat is protected!")
+
+    amount = min(random.randint(100, 5000), victim["coins"])
+
+    victim["coins"] -= amount
+    thief["coins"] += amount
+
+    cats.update_one({"_id": thief["_id"]}, {"$set": thief})
+    cats.update_one({"_id": victim["_id"]}, {"$set": victim})
+
+    await update.message.reply_text(f"😼 You stole {amount} coins!")
+
+    try:
+        await context.bot.send_message(
+            victim["_id"],
+            f"💸 Your cat was robbed by {update.effective_user.first_name}!\nLost: {amount} coins"
+        )
+    except:
+        pass
+
+async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message.reply_to_message:
+        return await update.message.reply_text("Reply to attack a cat.")
+
+    attacker = get_cat(update.effective_user)
+    victim = get_cat(update.message.reply_to_message.from_user)
+
+    reward = random.randint(200, 400)
+    attacker["kills"] += 1
+    victim["deaths"] += 1
+    attacker["coins"] += reward
+    attacker["dna"]["aggression"] += 2
+
+    cats.update_one({"_id": attacker["_id"]}, {"$set": attacker})
+    cats.update_one({"_id": victim["_id"]}, {"$set": victim})
+
+    await update.message.reply_text(f"⚔️ Cat battle won! Earned {reward} coins!")
+
+async def protect(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat = get_cat(update.effective_user)
+
+    if cat["coins"] < 500:
+        return await update.message.reply_text("Not enough coins for protection.")
+
+    cat["coins"] -= 500
+    cat["protected_until"] = datetime.now(UTC) + timedelta(days=1)
+
+    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+    await update.message.reply_text("🛡 Your cat is protected for 1 day.")
+
+# ================= LEADERBOARDS =================
+
+async def toprich(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    top = cats.find().sort("coins", -1).limit(10)
+    msg = "🏆 Top Rich Cats\n\n"
+    for i, c in enumerate(top, 1):
+        msg += f"{i}. {c['name']} — {c['coins']} coins\n"
+    await update.message.reply_text(msg)
+
+async def topkill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    top = cats.find().sort("kills", -1).limit(10)
+    msg = "⚔️ Top Cat Fighters\n\n"
+    for i, c in enumerate(top, 1):
+        msg += f"{i}. {c['name']} — {c['kills']} wins\n"
+    await update.message.reply_text(msg)
+
+# ================= PROFILE =================
+
+async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat = get_cat(update.effective_user)
+    d = cat["dna"]
+    rank = calculate_global_rank(cat["_id"])
+
     await update.message.reply_text(
-        f"🎒 Inventory\n"
-        f"🐟 Fish Bait: {inv['fish_bait']}\n"
-        f"🛡 Shields: {inv['shield']}"
+        f"🐾 {cat['level']}\n"
+        f"💰 Coins: {cat['coins']}\n"
+        f"🏆 Rank: #{rank}\n"
+        f"🐟 Fish: {cat['fish']}\n"
+        f"⚔️ Wins: {cat['kills']} | 💀 Deaths: {cat['deaths']}\n\n"
+        f"DNA → 😼 {d['aggression']} | 🧠 {d['intelligence']} | 🍀 {d['luck']} | 💖 {d['charm']}"
     )
 
-
-# ================= SHOP =================
-SHOP_ITEMS = {
-    "fish_bait": {"price": 300, "name": "🐟 Fish Bait"},
-    "shield": {"price": 800, "name": "🛡 Shield (Auto Protect)"},
-}
-
-async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = "🛒 Cat Shop\n"
-    buttons = []
-
-    for key, item in SHOP_ITEMS.items():
-        text += f"{item['name']} — ${item['price']}\n"
-        buttons.append([InlineKeyboardButton(f"Buy {item['name']}", callback_data=f"buy_{key}")])
-
-    await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
-
-
-async def buy_item(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    item_key = query.data.split("_")[1]
-    cat = get_cat(query.from_user)
-    item = SHOP_ITEMS[item_key]
-
-    if cat["coins"] < item["price"]:
-        return await query.edit_message_text("❌ Not enough coins.")
-
-    cat["coins"] -= item["price"]
-    cat["inventory"][item_key] += 1
-    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
-
-    await query.edit_message_text(f"✅ Purchased {item['name']}!")
-
-
-# ================= LEADERBOARD BUTTONS =================
-async def leaderboard(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    buttons = [
-        [InlineKeyboardButton("💰 Richest Cats", callback_data="lb_rich")],
-        [InlineKeyboardButton("💀 Top Killers", callback_data="lb_kill")],
-    ]
-    await update.message.reply_text("🏆 Leaderboards", reply_markup=InlineKeyboardMarkup(buttons))
-
-
-async def leaderboard_buttons(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-
-    if query.data == "lb_rich":
-        top = cats.find().sort("coins", -1).limit(10)
-        text = "💰 Top Rich Cats\n"
-        for i, c in enumerate(top, 1):
-            text += f"{i}. {c['name']} — {c['coins']}\n"
-    else:
-        top = cats.find().sort("kills", -1).limit(10)
-        text = "💀 Top Killer Cats\n"
-        for i, c in enumerate(top, 1):
-            text += f"{i}. {c['name']} — {c['kills']} kills\n"
-
-    await query.edit_message_text(text)
-
-
-# ================= GAME GUIDE =================
-GAME_TEXT = (
-    "🐱 **CATVERSE GUIDE**\n\n"
-    "• Game always ON, just chat!\n"
-    "• Fish events = eat | save | share\n"
-    "• /me — view your cat stats & ranking\n"
-    "• Reply + /kill — attack another cat\n"
-    "• /toprich — top rich cats\n"
-    "• /topkill — top killer cats\n"
-    "• /give — gift coins\n"
-    "• /rob — rob coins\n"
-    "• /protect — buy 1 day protection\n"
-    "• /shop — buy items\n"
-    "• /inventory — view items\n"
-    "• /leaderboard — rankings with buttons\n"
-    "• Dark Night 🌑 = rare power boost\n\n"
-    "Enjoy your cat life! 😼"
-)
-
-async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(GAME_TEXT, parse_mode="Markdown")
-
-async def game_alias(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await games(update, context)
-
-
 # ================= MAIN =================
+
 def main():
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("game", game_alias))
-    app.add_handler(CommandHandler("games", games))
-    app.add_handler(CommandHandler("inventory", inventory))
-    app.add_handler(CommandHandler("shop", shop))
-    app.add_handler(CommandHandler("leaderboard", leaderboard))
-
-    app.add_handler(CallbackQueryHandler(buy_item, pattern="^buy_"))
-    app.add_handler(CallbackQueryHandler(leaderboard_buttons, pattern="^lb_"))
+    app.add_handler(CommandHandler("me", me))
+    app.add_handler(CommandHandler("daily", daily))
+    app.add_handler(CommandHandler("bal", bal))
+    app.add_handler(CommandHandler("give", give))
+    app.add_handler(CommandHandler("rob", rob))
+    app.add_handler(CommandHandler("kill", kill))
+    app.add_handler(CommandHandler("protect", protect))
+    app.add_handler(CommandHandler("toprich", toprich))
+    app.add_handler(CommandHandler("topkill", topkill))
 
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fish_action))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
 
-    print("🐱 CatVerse Ultimate Running...")
+    print("🐱 CATVERSE ULTIMATE BOT RUNNING...")
     app.run_polling()
-
 
 if __name__ == "__main__":
     main()
