@@ -15,8 +15,8 @@ from telegram.ext import (
 )
 
 # ================= CONFIG =================
-BOT_TOKEN = os.getenv("BOT_TOKEN")        # Set in Railway environment variables
-MONGO_URI = os.getenv("MONGO_URI")        # Set in Railway environment variables
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+MONGO_URI = os.getenv("MONGO_URI")
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
@@ -44,17 +44,12 @@ def get_cat(user):
             "xp": 0,
             "kills": 0,
             "premium": False,
-            "dna": {
-                "aggression": 1,
-                "intelligence": 1,
-                "luck": 1,
-                "charm": 1,
-            },
+            "dna": {"aggression": 1, "intelligence": 1, "luck": 1, "charm": 1},
             "level": "🐱 Kitten",
             "last_msg": 0,
             "protected_until": None,
             "last_daily": None,
-            "created": datetime.utcnow()
+            "created": datetime.utcnow(),
         }
         cats.insert_one(cat)
     return cat
@@ -101,8 +96,7 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if old_level != cat["level"]:
         await update.message.reply_text(
-            f"✨ EVOLVED!\nYou are now **{cat['level']}** 😼",
-            parse_mode="Markdown"
+            f"✨ EVOLVED!\nYou are now **{cat['level']}** 😼", parse_mode="Markdown"
         )
 
     # Fish event
@@ -117,12 +111,11 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         global_state.update_one(
             {"_id": "dark"},
             {"$set": {"until": datetime.utcnow() + timedelta(minutes=5)}},
-            upsert=True
+            upsert=True,
         )
         await update.message.reply_text(
-            "🌑 **DARK NIGHT HAS FALLEN**\n"
-            "Rare events stronger… Legends rise 👑",
-            parse_mode="Markdown"
+            "🌑 **DARK NIGHT HAS FALLEN**\nRare events stronger… Legends rise 👑",
+            parse_mode="Markdown",
         )
 
     cats.update_one({"_id": user.id}, {"$set": cat})
@@ -213,7 +206,9 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
     cats.update_one({"_id": target["_id"]}, {"$set": target})
-    await update.message.reply_text(f"😈 You robbed ${net} from {target['name']} (Tax: {int(amt*tax)})")
+    await update.message.reply_text(
+        f"😈 You robbed ${net} from {target['name']} (Tax: {int(amt*tax)})"
+    )
 
 async def protect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
@@ -265,7 +260,7 @@ async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"DNA:\n"
         f"😼 {d['aggression']}  🧠 {d['intelligence']}\n"
         f"🍀 {d['luck']}  💖 {d['charm']}",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -282,7 +277,7 @@ async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /protect — buy 1 day protection\n"
         "• Dark Night 🌑 = rare power boost\n\n"
         "Enjoy your cat life! 😼",
-        parse_mode="Markdown"
+        parse_mode="Markdown",
     )
 
 # ================= MAIN =================
@@ -302,7 +297,7 @@ def main():
 
     # Chat events
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
-    app.add_handler(MessageHandler(filters.TEXT, fish_action))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, fish_action))
 
     print("🐱 CATVERSE BOT FULL ECONOMY & RPG IS LIVE")
     app.run_polling()
