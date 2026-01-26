@@ -13,8 +13,8 @@ from telegram.ext import (
 )
 
 # ================= CONFIG =================
-BOT_TOKEN = "8478156056:AAG_owPFEnhzTzjgALwb8282njOUwjRVH9Q"
-MONGO_URI = "mongodb+srv://analtamash1_db_user:gmyO12vMyjjy8fp7@cluster0.etl5tvc.mongodb.net/?appName=Cluster0"
+BOT_TOKEN = os.getenv("BOT_TOKEN","8478156056:AAG_owPFEnhzTzjgALwb8282njOUwjRVH9Q")        # Set in Rail environment variables
+MONGO_URI = os.getenv("MONGO_URI","mongodb+srv://analtamash1_db_user:gmyO12vMyjjy8fp7@cluster0.etl5tvc.mongodb.net/?appName=Cluster0")        # Set in Rail environment variables
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
