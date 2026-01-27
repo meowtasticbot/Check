@@ -58,7 +58,7 @@ def get_cat(user):
         "inventory": {"fish_bait": 0},
         "fish_streak": 0,
         "last_fish_date": None,
-        "fish_total_earned": 0
+        "fish_total_earned": 0,
         "wanted": 0,
         "created": datetime.now(timezone.utc),
     }
