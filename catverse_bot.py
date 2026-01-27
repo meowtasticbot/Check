@@ -705,11 +705,6 @@ async def leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=leaderboard_buttons()
     )
 
-# ================= HANDLERS REGISTER =================
-app.add_handler(CommandHandler("toprich", toprich))
-app.add_handler(CommandHandler("topkill", topkill))
-app.add_handler(CallbackQueryHandler(leaderboard_callback, pattern="^lb_"))
-
 # ================= PROFILE =================
 async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Agar reply kiya ya user mention kiya
