@@ -131,51 +131,127 @@ async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(text)
 
-# ---- Passive XP system ----
+# ---- Passive XP + Activity XP System ----
 async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
+
     cat = get_cat(update.effective_user)
     now = time.time()
-    if now - cat["last_msg"] < 4:
+
+    # Anti-spam cooldown (4 sec)
+    if now - cat.get("last_msg", 0) < 4:
         return
+
     cat["last_msg"] = now
-    cat["xp"] += random.randint(1, 3)
+
+    # Base chat XP
+    xp_gain = random.randint(2, 5)
+
+    # Longer messages = little more XP
+    msg_len = len(update.message.text)
+    if msg_len > 80:
+        xp_gain += 2
+    elif msg_len > 40:
+        xp_gain += 1
+
+    cat["xp"] += xp_gain
+
+    # Random DNA stat improvement
     stat = random.choice(list(cat["dna"]))
-    cat["dna"][stat] += 1
+    cat["dna"][stat] += random.randint(1, 2)
+
     old_level = cat["level"]
     evolve(cat)
+
     if old_level != cat["level"]:
-        await update.message.reply_text(f"✨ Your cat evolved into {cat['level']}!")
-    # Random Fish Event 5%
+        await update.message.reply_text(f"✨ Your cat evolved to Level {cat['level']}!")
+
+    # 🎣 Random Fish Event (5%)
     if random.random() < 0.05:
         context.chat_data["fish_event"] = True
         await update.message.reply_text("🐟 A magic fish appeared! Type: eat | save | share")
+
+    # 🎁 Small random bonus event (2%)
+    if random.random() < 0.02:
+        bonus = random.randint(10, 25)
+        cat["coins"] += bonus
+        await update.message.reply_text(f"💰 You found {bonus} bonus coins while chatting!")
+
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
 
-# ---- Fish Event ----
-async def fish_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.chat_data.get("fish_event"):
-        return
+# ------------------- FISHING EVENT (ADVANCED) -------------------
+async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
-    text = update.message.text.lower()
+    inventory = cat.get("inventory", {})
 
-    if "eat" in text:
-        cat["fish"] += 2
-        cat["dna"]["aggression"] += 1
-        msg = "😻 You ate the fish!"
-    elif "save" in text:
-        cat["dna"]["intelligence"] += 2
-        msg = "🧠 Intelligence up!"
-    elif "share" in text:
-        cat["dna"]["charm"] += 2
-        msg = "💖 Charm up!"
+    now = datetime.utcnow()
+
+    # ---------------- COOLDOWN SYSTEM ----------------
+    last_fish_time = cat.get("last_fish_time")
+
+    level = cat.get("level", 1)
+    cooldown_minutes = max(20, 60 - (level * 2))  # Higher level = less wait
+    cooldown = timedelta(minutes=cooldown_minutes)
+
+    if last_fish_time:
+        last_time = datetime.fromisoformat(last_fish_time)
+        if now < last_time + cooldown:
+            remaining = (last_time + cooldown) - now
+            mins = remaining.seconds // 60
+            secs = remaining.seconds % 60
+            return await update.message.reply_text(
+                f"⏳ You must wait {mins}m {secs}s before fishing again!"
+            )
+
+    # Save new fish time
+    cat["last_fish_time"] = now.isoformat()
+
+    # ---------------- BAIT BONUS ----------------
+    rare_bonus = 0
+    if inventory.get("fish_bait", 0) > 0:
+        rare_bonus += 15
+        inventory["fish_bait"] -= 1
+        await update.message.reply_text("🐟 Fish Bait used! +15% rare luck!")
+
+    # ---------------- OUTCOME ROLL ----------------
+    roll = random.randint(1, 100)
+
+    # 🎏 GOLDEN FISH JACKPOT (2% base chance)
+    if roll <= 2 + (rare_bonus // 3):
+        reward = random.randint(2000, 4000)
+        cat["coins"] += reward
+        msg = f"🎏✨ LEGENDARY GOLDEN FISH!!! You earned **${reward}** jackpot!"
+
+    # 🦈 SHARK ATTACK (10% chance)
+    elif roll <= 12:
+        loss = min(cat["coins"], random.randint(100, 400))
+        cat["coins"] -= loss
+        msg = f"🦈 OH NO! A shark attacked and you lost **${loss}**!"
+
+    # 🐠 RARE FISH (normal rare)
+    elif roll <= 30 + rare_bonus:
+        reward = 500
+        cat["coins"] += reward
+        msg = f"🐠 You caught a rare fish! +${reward}"
+
+    # 🐟 NORMAL FISH
     else:
-        return
+        reward = 120
+        cat["coins"] += reward
+        msg = f"🐟 You caught a normal fish. +${reward}"
 
-    evolve(cat)
-    context.chat_data.pop("fish_event")
-    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+    # ---------------- SAVE DATA ----------------
+    cat["inventory"] = inventory
+    cats.update_one(
+        {"_id": cat["_id"]},
+        {"$set": {
+            "coins": cat["coins"],
+            "inventory": cat["inventory"],
+            "last_fish_time": cat["last_fish_time"]
+        }}
+    )
+
     await update.message.reply_text(msg)
 
 # ---- /xp command ----
