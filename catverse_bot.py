@@ -672,7 +672,7 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ------------------- FISHING EVENT EXAMPLE -------------------
-async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def moon_mere_papa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
     inventory = cat.get("inventory", {})
 
@@ -1106,6 +1106,7 @@ def main():
     app.add_handler(CallbackQueryHandler(shop_system, pattern="shop|giftshop"))
     app.add_handler(CommandHandler("rob", rob))
     app.add_handler(CommandHandler("fish", fish))
+    app.add_handler(CommandHandler("moon_mere_papa", moon_mere_papa))
     app.add_handler(CommandHandler("kill", kill))
     app.add_handler(CommandHandler("protect", protect))
     app.add_handler(CommandHandler("toprich", toprich))
