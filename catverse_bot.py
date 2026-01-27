@@ -69,11 +69,17 @@ def get_cat(user):
     return cat
 
 def evolve(cat):
-    total = sum(cat["dna"].values())
-    for name, req in reversed(LEVELS):
-        if total >= req:
-            cat["level"] = name
+    current_xp = cat.get("xp", 0)
+    old_level = cat.get("level", "🐱 Kitten")
+
+    new_level = old_level
+    for name, xp_required in reversed(LEVELS):
+        if current_xp >= xp_required:
+            new_level = name
             break
+
+    cat["level"] = new_level
+    return old_level != new_level  # Returns True if leveled up
 
 def is_protected(cat):
     protected_until = cat.get("protected_until")
@@ -157,15 +163,30 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cat["xp"] += xp_gain
 
-    # Random DNA stat improvement
+    # Random DNA stat improvement (UNCHANGED)
     stat = random.choice(list(cat["dna"]))
     cat["dna"][stat] += random.randint(1, 2)
 
-    old_level = cat["level"]
-    evolve(cat)
+    # 🔼 LEVEL CHECK (XP BASED NOW)
+    leveled_up = evolve(cat)
 
-    if old_level != cat["level"]:
-        await update.message.reply_text(f"✨ Your cat evolved to Level {cat['level']}!")
+    if leveled_up:
+        level_msg = (
+            f"🎉 {update.effective_user.first_name}'s cat leveled up!\n"
+            f"🏆 New Rank: {cat['level']}"
+        )
+
+        # Group notification
+        await update.message.reply_text(level_msg)
+
+        # DM notification
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_user.id,
+                text=f"📩 LEVEL UP!\nYour cat is now {cat['level']} 🎉"
+            )
+        except:
+            pass
 
     # 🎣 Random Fish Event (5%)
     if random.random() < 0.05:
