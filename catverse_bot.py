@@ -29,10 +29,10 @@ leaderboard_history = db["leaderboard_history"]
 
 LEVELS = [
     ("🐱 Kitten", 0),
-    ("😺 Teen Cat", 30),
-    ("😼 Rogue Cat", 60),
-    ("🐯 Alpha Cat", 100),
-    ("👑 Legend Cat", 160),
+    ("😺 Teen Cat", 3000),
+    ("😼 Rogue Cat", 60000),
+    ("🐯 Alpha Cat", 100000),
+    ("👑 Legend Cat", 16000000),
 ]
 
 # ================= DATABASE =================
@@ -196,84 +196,78 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
 
-# ------------------- FISHING EVENT (ADVANCED BALANCED) -------------------
+# ------------------- FISHING EVENT (ADVANCED BALANCED - FIXED) -------------------
 async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
     inventory = cat.get("inventory", {})
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
 
     # ---------------- COOLDOWN SYSTEM ----------------
     last_fish_time = cat.get("last_fish_time")
     level = cat.get("level", "🐱 Kitten")
 
-    # Convert level name → numeric level index
     level_number = 1
     for i, (name, _) in enumerate(LEVELS, start=1):
         if name == level:
             level_number = i
             break
 
-    cooldown_minutes = max(20, 60 - (level_number * 2))  # Higher level = less wait
-    cooldown = timedelta(minutes=cooldown_minutes)
+    cooldown = timedelta(minutes=max(20, 60 - (level_number * 2)))
 
     if last_fish_time:
         try:
             last_time = datetime.fromisoformat(last_fish_time)
+            if last_time.tzinfo is None:
+                last_time = last_time.replace(tzinfo=timezone.utc)
+
             remaining = (last_time + cooldown) - now
             if remaining.total_seconds() > 0:
                 mins = int(remaining.total_seconds() // 60)
                 secs = int(remaining.total_seconds() % 60)
                 return await update.message.reply_text(
-                    f"⏳ You must wait {mins}m {secs}s before fishing again!"
+                    f"⏳ Your cat is resting...\nCome back in {mins}m {secs}s 🐾"
                 )
         except:
             pass
 
-    # Save new fish time
     cat["last_fish_time"] = now.isoformat()
 
-    # ---------------- BAIT BONUS ----------------
+    # ---------------- BAIT BONUS (CAPPED) ----------------
     rare_bonus = 0
     if inventory.get("fish_bait", 0) > 0:
-        rare_bonus += 15
+        rare_bonus = 10   # ❗ capped
         inventory["fish_bait"] -= 1
-        await update.message.reply_text("🐟 Fish Bait used! +15% rare luck!")
+        await update.message.reply_text("🐟 Fish bait used! +10% luck 🍀")
 
-    # ---------------- OUTCOME ROLL (60% LOSS / 40% PROFIT) ----------------
     roll = random.randint(1, 100)
 
-    # 🎏 GOLDEN FISH JACKPOT (HUGE PROFIT)
-    if roll <= 3 + (rare_bonus // 4):
+    # ---------------- OUTCOME ----------------
+    if roll <= 3:
         reward = random.randint(2000, 4000)
         cat["coins"] += reward
-        msg = f"🎏✨ LEGENDARY GOLDEN FISH!!! You earned ${reward} jackpot!"
+        msg = f"🐟✨ MYTHIC TUNA!\nYour cat earned 🪙 {reward}!"
 
-    # 🐠 RARE FISH (PROFIT)
     elif roll <= 15 + rare_bonus:
         reward = 500
         cat["coins"] += reward
-        msg = f"🐠 You caught a rare fish! +${reward}"
+        msg = f"🐠 Rare catch! +🪙 {reward}"
 
-    # 🐟 SMALL FISH (SMALL PROFIT)
     elif roll <= 40:
         reward = 120
         cat["coins"] += reward
-        msg = f"🐟 You caught a small fish. +${reward}"
+        msg = f"🐟 Small fish caught +🪙 {reward}"
 
-    # 🦈 SHARK ATTACK (BIG LOSS)
     elif roll <= 70:
         loss = min(cat["coins"], random.randint(150, 500))
         cat["coins"] -= loss
-        msg = f"🦈 A shark attacked! You lost ${loss}!"
+        msg = f"🦈 Sea Dog attack! Lost 🪙 {loss}"
 
-    # 🌊 EMPTY NET (SMALL LOSS)
     else:
         loss = min(cat["coins"], random.randint(40, 120))
         cat["coins"] -= loss
-        msg = f"🌊 Your net came back empty and torn… Lost ${loss} fixing it."
+        msg = f"🌊 Torn net... lost 🪙 {loss}"
 
-    # ---------------- SAVE DATA ----------------
     cat["inventory"] = inventory
     cats.update_one(
         {"_id": cat["_id"]},
