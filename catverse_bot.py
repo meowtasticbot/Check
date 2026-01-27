@@ -780,6 +780,7 @@ def main():
     app.add_handler(CallbackQueryHandler(leaderboard_callback, pattern="^lb_"))
     app.add_handler(CommandHandler("shop", shop))
     app.add_handler(CommandHandler("inventory", inventory))
+    app.add_handler(CallbackQueryHandler(shop_system, pattern="^shop:"))
     app.add_handler(CommandHandler("fun", fun))
     app.add_handler(CommandHandler("upgrade", upgrade))
 
