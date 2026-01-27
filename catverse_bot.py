@@ -990,7 +990,7 @@ def main():
     app.add_handler(CommandHandler("bal", bal))
     app.add_handler(CommandHandler("give", give))
     app.add_handler(CommandHandler("gift", gift))
-    app.add_handler(CommandHandler("use", use_item))
+    app.add_handler(CommandHandler("use", use)
     app.add_handler(CallbackQueryHandler(shop_system, pattern="shop|giftshop"))
     app.add_handler(CommandHandler("rob", rob))
     app.add_handler(CommandHandler("fish", fish))
