@@ -188,11 +188,6 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except:
             pass
 
-    # 🎣 Random Fish Event (5%)
-    if random.random() < 0.05:
-        context.chat_data["fish_event"] = True
-        await update.message.reply_text("🐟 A magic fish appeared! Type: eat | save | share")
-
     # 🎁 Small random bonus event (2%)
     if random.random() < 0.02:
         bonus = random.randint(10, 25)
@@ -201,7 +196,7 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
 
-# ------------------- FISHING EVENT (ADVANCED) -------------------
+# ------------------- FISHING EVENT (ADVANCED BALANCED) -------------------
 async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
     inventory = cat.get("inventory", {})
@@ -210,9 +205,16 @@ async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # ---------------- COOLDOWN SYSTEM ----------------
     last_fish_time = cat.get("last_fish_time")
-    level = cat.get("level", 1)
+    level = cat.get("level", "🐱 Kitten")
 
-    cooldown_minutes = max(20, 60 - (level * 2))  # Higher level = less wait
+    # Convert level name → numeric level index
+    level_number = 1
+    for i, (name, _) in enumerate(LEVELS, start=1):
+        if name == level:
+            level_number = i
+            break
+
+    cooldown_minutes = max(20, 60 - (level_number * 2))  # Higher level = less wait
     cooldown = timedelta(minutes=cooldown_minutes)
 
     if last_fish_time:
@@ -226,7 +228,7 @@ async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     f"⏳ You must wait {mins}m {secs}s before fishing again!"
                 )
         except:
-            pass  # Agar old data ka format alag ho toh ignore
+            pass
 
     # Save new fish time
     cat["last_fish_time"] = now.isoformat()
@@ -238,32 +240,38 @@ async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         inventory["fish_bait"] -= 1
         await update.message.reply_text("🐟 Fish Bait used! +15% rare luck!")
 
-    # ---------------- OUTCOME ROLL ----------------
+    # ---------------- OUTCOME ROLL (60% LOSS / 40% PROFIT) ----------------
     roll = random.randint(1, 100)
 
-    # 🎏 GOLDEN FISH JACKPOT
-    if roll <= 2 + (rare_bonus // 3):
+    # 🎏 GOLDEN FISH JACKPOT (HUGE PROFIT)
+    if roll <= 3 + (rare_bonus // 4):
         reward = random.randint(2000, 4000)
         cat["coins"] += reward
         msg = f"🎏✨ LEGENDARY GOLDEN FISH!!! You earned ${reward} jackpot!"
 
-    # 🦈 SHARK ATTACK
-    elif roll <= 12:
-        loss = min(cat["coins"], random.randint(100, 400))
-        cat["coins"] -= loss
-        msg = f"🦈 OH NO! A shark attacked and you lost ${loss}!"
-
-    # 🐠 RARE FISH
-    elif roll <= 30 + rare_bonus:
+    # 🐠 RARE FISH (PROFIT)
+    elif roll <= 15 + rare_bonus:
         reward = 500
         cat["coins"] += reward
         msg = f"🐠 You caught a rare fish! +${reward}"
 
-    # 🐟 NORMAL FISH
-    else:
+    # 🐟 SMALL FISH (SMALL PROFIT)
+    elif roll <= 40:
         reward = 120
         cat["coins"] += reward
-        msg = f"🐟 You caught a normal fish. +${reward}"
+        msg = f"🐟 You caught a small fish. +${reward}"
+
+    # 🦈 SHARK ATTACK (BIG LOSS)
+    elif roll <= 70:
+        loss = min(cat["coins"], random.randint(150, 500))
+        cat["coins"] -= loss
+        msg = f"🦈 A shark attacked! You lost ${loss}!"
+
+    # 🌊 EMPTY NET (SMALL LOSS)
+    else:
+        loss = min(cat["coins"], random.randint(40, 120))
+        cat["coins"] -= loss
+        msg = f"🌊 Your net came back empty and torn… Lost ${loss} fixing it."
 
     # ---------------- SAVE DATA ----------------
     cat["inventory"] = inventory
