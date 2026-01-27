@@ -367,9 +367,140 @@ async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg += "Empty 😿"
 
     await update.message.reply_text(msg, parse_mode="Markdown")
+
+# -------------------- ITEM USE LOGIC --------------------
+
+async def use(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat = get_cat(update.effective_user)  # get user data
+
+    if not context.args:
+        return await update.message.reply_text(
+            "Usage: /use <item>\nExample: /use shield"
+        )
+
+    item = context.args[0].lower()
+    inventory = cat.get("inventory", {})
+
+    # ------------------- SHIELD -------------------
+    if item == "shield":
+        if inventory.get("shield", 0) <= 0:
+            return await update.message.reply_text("❌ You don't own a shield.")
+
+        inventory["shield"] -= 1
+        cat["shield_until"] = datetime.now(timezone.utc) + timedelta(days=1)
+        await update.message.reply_text("🛡 Shield activated for 24 hours!")
+
+    # ------------------- SHIELD BREAKER -------------------
+    elif item == "shield_breaker":
+        if inventory.get("shield_breaker", 0) <= 0:
+            return await update.message.reply_text("❌ You don't own a Shield Breaker.")
+        # For shield breaker, it is consumed automatically in rob command
+        return await update.message.reply_text("ℹ️ Use a Shield Breaker during a robbery!")
+
+    # ------------------- LUCK BOOST -------------------
+    elif item == "luck_boost":
+        if inventory.get("luck_boost", 0) <= 0:
+            return await update.message.reply_text("❌ You don't own a Luck Boost.")
+        # For luck boost, it is consumed automatically in rob command
+        return await update.message.reply_text("ℹ️ Luck Boost will be applied automatically on next robbery!")
+
+    # ------------------- BAIL PASS -------------------
+    elif item == "bail_pass":
+        if inventory.get("bail_pass", 0) <= 0:
+            return await update.message.reply_text("❌ You don't own a Bail Pass.")
+        # Used automatically when jailed
+        return await update.message.reply_text("ℹ️ Bail Pass will be used automatically if jailed!")
+
+    # ------------------- FISH BAIT -------------------
+    elif item == "fish_bait":
+        if inventory.get("fish_bait", 0) <= 0:
+            return await update.message.reply_text("❌ You don't own Fish Bait.")
+        # Consumed automatically in fishing
+        return await update.message.reply_text("ℹ️ Fish Bait will be consumed automatically in next fishing event!")
+
+    else:
+        return await update.message.reply_text("❌ Unknown item!")
+
+    # Update cat inventory & db
+    cat["inventory"] = inventory
+    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+
+
+# ------------------- HELPER FUNCTION -------------------
+def has_active_shield(cat):
+    """Check if the cat has an active shield protection"""
+    return cat.get("shield_until") and cat["shield_until"] > datetime.now(timezone.utc)
+
+
+# ------------------- ROB COMMAND LOGIC EXAMPLES -------------------
+async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    attacker = get_cat(update.effective_user)
+    target_user = update.message.reply_to_message.from_user
+    target = get_cat(target_user)
+
+    # 1️⃣ Check Shield
+    if has_active_shield(target):
+        if attacker["inventory"].get("shield_breaker", 0) > 0:
+            attacker["inventory"]["shield_breaker"] -= 1
+            target["shield_until"] = None
+            await update.message.reply_text("💣 You broke the target's shield!")
+        else:
+            return await update.message.reply_text("🛡 Target is protected by a shield! Use a Shield Breaker.")
+
+    # 2️⃣ Luck Boost
+    luck_bonus = 0
+    if attacker["inventory"].get("luck_boost", 0) > 0:
+        luck_bonus = 20
+        attacker["inventory"]["luck_boost"] -= 1
+        await update.message.reply_text("🍀 Luck Boost applied! +20% success chance.")
+
+    # 3️⃣ Determine success
+    success_chance = 50 + luck_bonus
+    if random.randint(1, 100) <= success_chance:
+        reward = 200
+        attacker["coins"] += reward
+        await update.message.reply_text(f"✅ Robbery successful! You gained ${reward}")
+    else:
+        # Check Bail Pass
+        if attacker["inventory"].get("bail_pass", 0) > 0:
+            attacker["inventory"]["bail_pass"] -= 1
+            await update.message.reply_text("🚔 Bail Pass used! You escaped jail.")
+        else:
+            attacker["jail_until"] = datetime.now(timezone.utc) + timedelta(minutes=30)
+            await update.message.reply_text("❌ Robbery failed! You are jailed for 30 minutes.")
+
+    # Update attacker & target
+    cats.update_one({"_id": attacker["_id"]}, {"$set": attacker})
+    cats.update_one({"_id": target["_id"]}, {"$set": target})
+
+
+# ------------------- FISHING EVENT EXAMPLE -------------------
+async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    cat = get_cat(update.effective_user)
+    inventory = cat.get("inventory", {})
+
+    rare_bonus = 0
+    if inventory.get("fish_bait", 0) > 0:
+        rare_bonus = 15
+        inventory["fish_bait"] -= 1
+        await update.message.reply_text("🐟 Fish Bait used! +15% rare chance")
+
+    if random.randint(1, 100) <= 10 + rare_bonus:
+        reward = 500
+        await update.message.reply_text(f"🎉 You caught a rare fish! +${reward}")
+    else:
+        reward = 100
+        await update.message.reply_text(f"🐟 You caught a normal fish. +${reward}")
+
+    cat["coins"] += reward
+    cat["inventory"] = inventory
+    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+        
     
 # ================= ROB =================
+    
 # ================= ROB =================
+    
 async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type == "private":
         return await update.message.reply_text("❌ Rob works in groups only.")
@@ -772,7 +903,9 @@ def main():
     app.add_handler(CommandHandler("claim", claim))  # 👈 NEW
     app.add_handler(CommandHandler("bal", bal))
     app.add_handler(CommandHandler("give", give))
+    app.add_handler(CommandHandler("use", use))
     app.add_handler(CommandHandler("rob", rob))
+    app.add_handler(CommandHandler("fish", fish))
     app.add_handler(CommandHandler("kill", kill))
     app.add_handler(CommandHandler("protect", protect))
     app.add_handler(CommandHandler("toprich", toprich))
