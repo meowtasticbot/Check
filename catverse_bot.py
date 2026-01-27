@@ -198,9 +198,10 @@ async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("⚠️ Daily reward DM only.")
 
     cat = get_cat(update.effective_user)
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()  # ✅ FIXED
 
-    if cat.get("last_daily") and now - cat["last_daily"] < timedelta(hours=24):
+    last = cat.get("last_daily")
+    if last and (now - last) < timedelta(hours=24):
         return await update.message.reply_text("⏳ Already claimed today!")
 
     cat["coins"] += 400
@@ -228,10 +229,10 @@ async def claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("🚫 This command works only in groups with 1000+ members.")
 
     cat = get_cat(update.effective_user)
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()  # ✅ FIXED
 
-    # 24h cooldown (separate from daily)
-    if cat.get("last_claim") and now - cat["last_claim"] < timedelta(hours=24):
+    last = cat.get("last_claim")
+    if last and (now - last) < timedelta(hours=24):
         return await update.message.reply_text("⏳ You already claimed a group reward today!")
 
     reward = 250  # Group reward amount
@@ -243,11 +244,13 @@ async def claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🏆 Group reward claimed! You received ${reward}")
 
 
+# 💰 CHECK BALANCE
 async def bal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
     await update.message.reply_text(f"💰 Balance: ${cat['coins']}")
 
 
+# 💸 GIVE MONEY
 async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.reply_to_message or not context.args:
         return await update.message.reply_text("❗ Reply with /give <amount>")
@@ -275,7 +278,7 @@ async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cats.update_one({"_id": receiver["_id"]}, {"$set": receiver})
 
     await update.message.reply_text(f"🐾 Sent ${final} after tax!")
-
+    
 # ================= SHOP =================
 
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
