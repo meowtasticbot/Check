@@ -488,6 +488,10 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attacker_user = update.effective_user
     victim_user = update.message.reply_to_message.from_user
 
+    # Khud ko attack na kar sake
+    if attacker_user.id == victim_user.id:
+        return await update.message.reply_text("You can't attack yourself 😹")
+
     attacker = get_cat(attacker_user)
     victim = get_cat(victim_user)
 
@@ -495,30 +499,46 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attacker_mention = f"<a href='tg://user?id={attacker_user.id}'>{attacker_user.first_name}</a>"
     victim_mention = f"<a href='tg://user?id={victim_user.id}'>{victim_user.first_name}</a>"
 
-    # Reward
+    # 🪦 Check if victim already dead
+    if victim.get("health", 100) <= 0:
+        return await update.message.reply_text(
+            f"☠️ {victim_mention} is already dead!\nNo need to attack again 😼",
+            parse_mode="HTML"
+        )
+
+    # 🎁 Reward
     reward = random.randint(80, 160)
+
     attacker["kills"] += 1
     victim["deaths"] += 1
     attacker["coins"] += reward
+
+    # Victim health zero kar do
+    victim["health"] = 0
 
     cats.update_one({"_id": attacker["_id"]}, {"$set": attacker})
     cats.update_one({"_id": victim["_id"]}, {"$set": victim})
 
     # ✅ Group message
     await update.message.reply_text(
-        f"⚔️ {attacker_mention} attacked {victim_mention} and won!\n💰 Reward: ${reward}",
+        f"⚔️ {attacker_mention} attacked {victim_mention} and won!\n"
+        f"💰 Reward: ${reward}",
         parse_mode="HTML"
     )
 
-    # 📩 DM to victim
+    # 📩 DM to victim (bot open ho ya na ho, try hoga)
     try:
         await context.bot.send_message(
             chat_id=victim_user.id,
-            text=f"🚨 You were attacked by {attacker_mention}!\n💀 You lost the fight!",
-            parse_mode="HTML"
+            text=(
+                f"🚨 You were attacked by {attacker_user.first_name}!\n"
+                f"💀 You lost the fight and are now dead.\n"
+                f"❤️ Your health is 0."
+            )
         )
-    except:
-        pass  # user may have DMs closed
+    except Exception:
+        pass  # DM failed (user never started bot or blocked).
+        
 # ================= PROTECTION COMMAND =================
 
 async def protect(update: Update, context: ContextTypes.DEFAULT_TYPE):
