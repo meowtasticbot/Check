@@ -36,10 +36,26 @@ LEVELS = [
 # ================= SHOP ITEMS =================
 
 SHOP_ITEMS = {
-    "fish_bait": {"price": 80, "desc": "Used to attract more fish 🐟"},
-    "bail_pass": {"price": 400, "desc": "Skip wanted level penalty 🛡"},
-    "luck_boost": {"price": 250, "desc": "Increase your rob success chance 🍀"},
-    "shield": {"price": 350, "desc": "Protect from robbers for 1 day 🛡"},
+    "fish_bait": {
+        "price": 80,
+        "desc": "🐟 Fish Bait — Increases chance to find rare magic fish during chat events"
+    },
+    "bail_pass": {
+        "price": 400,
+        "desc": "🚔 Bail Pass — Escape wanted penalty after failed crimes"
+    },
+    "luck_boost": {
+        "price": 250,
+        "desc": "🍀 Luck Boost — Improves robbery success rate (one-time use)"
+    },
+    "shield": {
+        "price": 350,
+        "desc": "🛡 Basic Shield — Blocks robberies for 1 full day"
+    },
+    "shield_breaker": {
+        "price": 800,
+        "desc": "💣 Shield Breaker — Destroys a target's protection during robbery"
+    },
 }
 
 # ================= DATABASE =================
@@ -60,6 +76,7 @@ def get_cat(user):
         "last_msg": 0,
         "protected_until": None,
         "last_daily": None,
+        "last_claim": None,  # 👈 ADD THI
         "last_rob": {},
         "wanted": 0,
         "created": datetime.now(timezone.utc),
@@ -166,35 +183,81 @@ async def fish_action(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= ECONOMY =================
 
 async def daily(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Only in DM
     if update.effective_chat.type != "private":
         return await update.message.reply_text("⚠️ Daily reward DM only.")
+
     cat = get_cat(update.effective_user)
     now = datetime.now(timezone.utc)
 
-    if cat["last_daily"] and now - cat["last_daily"] < timedelta(hours=24):
+    if cat.get("last_daily") and now - cat["last_daily"] < timedelta(hours=24):
         return await update.message.reply_text("⏳ Already claimed today!")
 
     cat["coins"] += 400
     cat["last_daily"] = now
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+
     await update.message.reply_text("🎁 You got $400!")
+
+
+# 🆕 GROUP CLAIM REWARD (1000+ MEMBERS ONLY)
+async def claim(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.effective_chat
+
+    # ❌ Not allowed in private chat
+    if chat.type == "private":
+        return await update.message.reply_text("❌ Use /daily in DM for personal reward.")
+
+    # 👥 Check group size
+    try:
+        members = await context.bot.get_chat_member_count(chat.id)
+    except:
+        return await update.message.reply_text("⚠️ Unable to verify group size.")
+
+    if members < 1000:
+        return await update.message.reply_text("🚫 This command works only in groups with 1000+ members.")
+
+    cat = get_cat(update.effective_user)
+    now = datetime.now(timezone.utc)
+
+    # 24h cooldown (separate from daily)
+    if cat.get("last_claim") and now - cat["last_claim"] < timedelta(hours=24):
+        return await update.message.reply_text("⏳ You already claimed a group reward today!")
+
+    reward = 250  # Group reward amount
+
+    cat["coins"] += reward
+    cat["last_claim"] = now
+    cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+
+    await update.message.reply_text(f"🏆 Group reward claimed! You received ${reward}")
+
 
 async def bal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
     await update.message.reply_text(f"💰 Balance: ${cat['coins']}")
 
+
 async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message.reply_to_message or not context.args:
         return await update.message.reply_text("❗ Reply with /give <amount>")
+
     sender = get_cat(update.effective_user)
     receiver = get_cat(update.message.reply_to_message.from_user)
-    amount = int(context.args[0])
+
+    try:
+        amount = int(context.args[0])
+        if amount <= 0:
+            return await update.message.reply_text("Enter a valid amount.")
+    except:
+        return await update.message.reply_text("Enter a valid number.")
 
     if sender["coins"] < amount:
         return await update.message.reply_text("Not enough money.")
 
     tax = int(amount * 0.05)
     final = amount - tax
+
     sender["coins"] -= amount
     receiver["coins"] += final
 
@@ -203,64 +266,117 @@ async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🐾 Sent ${final} after tax!")
 
-# ================= SHOP =================
-
+# ================= SHOP COMMAND =================
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [InlineKeyboardButton(f"{item} — ${info['price']}", callback_data=f"buy:{item}")]
+        [InlineKeyboardButton(f"🧾 {item.replace('_',' ').title()} — ${info['price']}", callback_data=f"view:{item}")]
         for item, info in SHOP_ITEMS.items()
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("🛒 Shop Items (Click to Buy):", reply_markup=reply_markup)
 
-async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if context.args:
-        item = context.args[0].lower()
-        amount = int(context.args[1]) if len(context.args) > 1 else 1
-        cat = get_cat(update.effective_user)
+    await update.message.reply_text(
+        "🛒 *Catverse Black Market*\nChoose an item to see details:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
 
-        if item not in SHOP_ITEMS:
-            return await update.message.reply_text("❌ Item not found!")
 
-        cost = SHOP_ITEMS[item]["price"] * amount
-        if cat["coins"] < cost:
-            return await update.message.reply_text("❌ Not enough money!")
-
-        cat["coins"] -= cost
-        cat["inventory"][item] += amount
-        cats.update_one({"_id": cat["_id"]}, {"$set": cat})
-
-        await update.message.reply_text(f"✅ Bought {amount} {item}(s) for ${cost}!")
-    else:
-        await update.message.reply_text("Usage: /buy <item> <amount>")
-
+# ================= BUTTON HANDLER =================
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
-    if query.data.startswith("buy:"):
+    cat = get_cat(query.from_user)
+
+    # ---------- VIEW ITEM ----------
+    if query.data.startswith("view:"):
         item = query.data.split(":")[1]
-        cat = get_cat(query.from_user)
-        cost = SHOP_ITEMS[item]["price"]
+        info = SHOP_ITEMS.get(item)
+
+        if not info:
+            return await query.answer("Item not found", show_alert=True)
+
+        owned = cat["inventory"].get(item, 0)
+
+        text = (
+            f"🧾 *{item.replace('_',' ').title()}*\n"
+            f"{info['desc']}\n\n"
+            f"💰 *Price:* ${info['price']}\n"
+            f"📦 *Owned:* {owned}"
+        )
+
+        keyboard = [
+            [InlineKeyboardButton("🛒 Buy 1", callback_data=f"buy:{item}:1")],
+            [InlineKeyboardButton("🛒 Buy 5", callback_data=f"buy:{item}:5")],
+            [InlineKeyboardButton("🔙 Back", callback_data="back_shop")]
+        ]
+
+        return await query.edit_message_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+
+    # ---------- BUY ITEM ----------
+    elif query.data.startswith("buy:"):
+        _, item, amount = query.data.split(":")
+        amount = int(amount)
+
+        if item not in SHOP_ITEMS:
+            return await query.answer("Item not found", show_alert=True)
+
+        price = SHOP_ITEMS[item]["price"]
+        cost = price * amount
 
         if cat["coins"] < cost:
-            await query.edit_message_text(f"❌ Not enough money for {item}!")
-        else:
-            cat["coins"] -= cost
-            cat["inventory"][item] += 1
-            cats.update_one({"_id": cat["_id"]}, {"$set": cat})
-            await query.edit_message_text(f"✅ Bought 1 {item} for ${cost}!")
+            return await query.answer("💸 Not enough coins!", show_alert=True)
+
+        cat["coins"] -= cost
+        cat["inventory"][item] = cat["inventory"].get(item, 0) + amount
+        cats.update_one({"_id": cat["_id"]}, {"$set": cat})
+
+        return await query.edit_message_text(
+            f"✅ *Purchase Successful!*\n"
+            f"🧾 {item.replace('_',' ').title()} × {amount}\n"
+            f"💰 Spent: ${cost}\n"
+            f"💵 Balance: ${cat['coins']}",
+            parse_mode="Markdown"
+        )
+
+    # ---------- BACK TO SHOP ----------
+    elif query.data == "back_shop":
+        keyboard = [
+            [InlineKeyboardButton(f"🧾 {item.replace('_',' ').title()} — ${info['price']}", callback_data=f"view:{item}")]
+            for item, info in SHOP_ITEMS.items()
+        ]
+
+        return await query.edit_message_text(
+            "🛒 *Catverse Black Market*\nChoose an item to see details:",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        
+# ================= INVENTRY =================
 
 async def inventory(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
-    inv = cat["inventory"]
-    msg = "🎒 Your Inventory:\n\n"
+    inv = cat.get("inventory", {})
+
+    msg = "🎒 *Your Inventory*\n\n"
+
+    items_found = False
     for item, amt in inv.items():
-        msg += f"{item}: {amt}\n"
-    await update.message.reply_text(msg)
+        if amt > 0:
+            items_found = True
+            msg += f"▫️ {item.replace('_',' ').title()} × {amt}\n"
+
+    if not items_found:
+        msg += "Empty 😿"
+
+    await update.message.reply_text(msg, parse_mode="Markdown")
 
 # ================= ROB =================
-# (logic same, just symbol change)
+    
+# (logic same, VIP Shield + Shield Breaker added)
 
 async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type == "private":
@@ -271,7 +387,7 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         amount = int(context.args[0])
     except:
-        return await update.message.reply_text("💸 Use like: /rob 200")
+        return await update.message.reply_text("💸 Use like: /rob <amount>")
 
     thief = get_cat(update.effective_user)
     victim_user = update.message.reply_to_message.from_user
@@ -283,6 +399,24 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return await update.message.reply_text("🤖 That's a bot!")
 
     victim = get_cat(victim_user)
+
+    # 👑 VIP SHIELD CHECK (Auto protection)
+    if victim["inventory"].get("vip_shield", 0) > 0:
+        victim["inventory"]["vip_shield"] -= 1
+        cats.update_one({"_id": victim["_id"]}, {"$set": victim})
+        return await update.message.reply_text(
+            f"👑 VIP SHIELD activated! {victim_user.first_name} blocked the robbery!"
+        )
+
+    # 🛡 NORMAL PROTECTION CHECK
+    if is_protected(victim) or victim["inventory"].get("shield", 0) > 0:
+        # 💣 Check if thief has shield breaker
+        if thief["inventory"].get("shield_breaker", 0) > 0:
+            thief["inventory"]["shield_breaker"] -= 1
+            cats.update_one({"_id": thief["_id"]}, {"$set": thief})
+            await update.message.reply_text("💣 Shield Breaker used! Protection destroyed!")
+        else:
+            return await update.message.reply_text("🛡 This cat is protected by a magic shield!")
 
     steal = min(amount, victim["coins"])
     if steal <= 0:
@@ -319,11 +453,44 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def protect(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
-    if cat["coins"] < 250:
-        return await update.message.reply_text("Need $250 for protection.")
+    now = datetime.now(timezone.utc)
 
-    cat["coins"] -= 250
-    cat["protected_until"] = datetime.now(timezone.utc) + timedelta(days=1)
+    # ❗ Show usage if no argument
+    if not context.args:
+        return await update.message.reply_text("⚠️ Usage: /protect 1d")
+
+    # ❌ Only 1d allowed
+    if context.args[0].lower() != "1d":
+        return await update.message.reply_text("❗ Users can only use: 1d")
+
+    # 🛡 Already protected check
+    if cat.get("protected_until") and cat["protected_until"] > now:
+        remaining = cat["protected_until"] - now
+        hours = remaining.seconds // 3600
+        minutes = (remaining.seconds % 3600) // 60
+        days = remaining.days
+
+        time_text = ""
+        if days > 0:
+            time_text += f"{days}d "
+        if hours > 0:
+            time_text += f"{hours}h "
+        if minutes > 0:
+            time_text += f"{minutes}m"
+
+        return await update.message.reply_text(
+            f"🛡 You are already protected!\n⏳ Time left: {time_text.strip()}"
+        )
+
+    # 💰 Cost check
+    cost = 600
+    if cat["coins"] < cost:
+        return await update.message.reply_text(f"Need ${cost} for protection.")
+
+    # ✅ Activate protection
+    cat["coins"] -= cost
+    cat["protected_until"] = now + timedelta(days=1)
+
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
 
     await update.message.reply_text("🛡 Protection enabled for 1 day.")
@@ -428,6 +595,7 @@ def main():
     app.add_handler(CommandHandler("games", games))
     app.add_handler(CommandHandler("me", me))
     app.add_handler(CommandHandler("daily", daily))
+    app.add_handler(CommandHandler("claim", claim))  # 👈 NEW
     app.add_handler(CommandHandler("bal", bal))
     app.add_handler(CommandHandler("give", give))
     app.add_handler(CommandHandler("rob", rob))
