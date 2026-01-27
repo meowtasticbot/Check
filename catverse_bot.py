@@ -604,7 +604,6 @@ def main():
     app.add_handler(CommandHandler("toprich", toprich))
     app.add_handler(CommandHandler("topkill", topkill))
     app.add_handler(CommandHandler("shop", shop))
-    app.add_handler(CommandHandler("buy", buy))
     app.add_handler(CommandHandler("inventory", inventory))
     app.add_handler(CommandHandler("fun", fun))
     app.add_handler(CommandHandler("upgrade", upgrade))
