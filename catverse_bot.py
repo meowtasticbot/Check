@@ -1204,12 +1204,12 @@ async def lobu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cats.update_one({"_id": target["_id"]}, {"$set": target})  # ✅ update DB
 
     mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
-    await update.message.reply_text(
-        f"👑 *Owner Power Activated!*\n\n"
-        f"✨ {mention} just received ${amount} instantly!\n"
-        f"💰 Owner's magic never fails!",
-        parse_mode=ParseMode.MARKDOWN
-    )
+await update.message.reply_text(
+    f"👑 Owner Power Activated!\n\n"
+    f"✨ {mention} just received ${amount} instantly!\n"
+    f"💰 Owner's magic never fails!",
+    parse_mode="HTML"  # ✅ HTML mode for clickable mentions
+)
     
 # ================= FUN COMMAND =================
 
