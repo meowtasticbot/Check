@@ -389,8 +389,7 @@ async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"🐾 Sent ${final} after tax!")
     
-# ----------------- DATA -----------------
-
+# ================== SHOP DATA ==================
 GIFT_ITEMS = {
     "rose": {"price": 500, "emoji": "🌹"},
     "chocolate": {"price": 800, "emoji": "🍫"},
@@ -412,20 +411,33 @@ SHOP_ITEMS = {
     "shield_breaker": {"price": 800, "desc": "💣 Breaks target protection"},
 }
 
-# ----------------- SHOP COMMAND -----------------
+# ================== OWNER LOCK ==================
+def is_owner(query, context):
+    return context.chat_data.get("shop_owner") == query.from_user.id
+
+# ================== SHOP COMMAND ==================
 async def shop(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton(i.replace('_',' ').title(), callback_data=f"shop:view:{i}")] for i in SHOP_ITEMS]
-    keyboard.append([InlineKeyboardButton("🎁 Gift Shop", callback_data="giftshop:open")])
+    context.chat_data["shop_owner"] = update.effective_user.id
+
+    keyboard = [
+        [InlineKeyboardButton("🧪 Items Shop", callback_data="shop:items")],
+        [InlineKeyboardButton("🎁 Gift Shop", callback_data="giftshop:open")]
+    ]
+
     await update.message.reply_text(
         "🛒 *Catverse Black Market*",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
-# ----------------- SHOP CALLBACK SYSTEM -----------------
+# ================== SHOP CALLBACK SYSTEM ==================
 async def shop_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+
+    if not is_owner(query, context):
+        return await query.answer("🚫 This shop isn't yours!", show_alert=True)
+
     cat = get_cat(query.from_user)
 
     if "inventory" not in cat or not isinstance(cat["inventory"], dict):
@@ -433,15 +445,40 @@ async def shop_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     data = query.data
 
+    # ===== MAIN MENU =====
+    if data == "shop:main":
+        keyboard = [
+            [InlineKeyboardButton("🧪 Items Shop", callback_data="shop:items")],
+            [InlineKeyboardButton("🎁 Gift Shop", callback_data="giftshop:open")]
+        ]
+        await query.edit_message_text("🛒 *Catverse Black Market*", parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+    # ===== OPEN ITEMS SHOP =====
+    elif data == "shop:items":
+        keyboard = [[InlineKeyboardButton(i.replace('_',' ').title(), callback_data=f"shop:view:{i}")] for i in SHOP_ITEMS]
+        keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="shop:main")])
+        await query.edit_message_text("🧪 *Black Market Items*", parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(keyboard))
+
+    # ===== OPEN GIFT SHOP =====
+    elif data == "giftshop:open":
+        keyboard = [[InlineKeyboardButton(f"{v['emoji']} {k.title()} - ${v['price']}",
+                                          callback_data=f"giftshop:view:{k}")] for k, v in GIFT_ITEMS.items()]
+        keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="shop:main")])
+        await query.edit_message_text("🎁 *Gift Shop*", parse_mode="Markdown",
+                                      reply_markup=InlineKeyboardMarkup(keyboard))
+
     # ===== VIEW NORMAL ITEM =====
-    if data.startswith("shop:view:"):
+    elif data.startswith("shop:view:"):
         item = data.split(":")[2]
         info = SHOP_ITEMS[item]
         owned = cat["inventory"].get(item, 0)
+
         text = f"🧾 *{item.replace('_',' ').title()}*\n\n{info['desc']}\n\n💰 Price: *${info['price']}*\n📦 Owned: *{owned}*"
         keyboard = [
             [InlineKeyboardButton("🛒 Purchase", callback_data=f"shop:buy:{item}")],
-            [InlineKeyboardButton("⬅ Back", callback_data="shop:back")]
+            [InlineKeyboardButton("⬅ Back", callback_data="shop:items")]
         ]
         await query.edit_message_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
@@ -451,34 +488,24 @@ async def shop_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
         price = SHOP_ITEMS[item]["price"]
 
         if cat["coins"] < price:
-            return await query.answer("💸 Not enough coins!", show_alert=True)
+            return await query.answer("💸 You don't have enough coins!", show_alert=True)
 
         cat["coins"] -= price
         cat["inventory"][item] = cat["inventory"].get(item, 0) + 1
         cats.update_one({"_id": cat["_id"]}, {"$set": {"coins": cat["coins"], "inventory": cat["inventory"]}})
 
         await query.edit_message_text(
-            f"✅ Purchased {item.replace('_',' ').title()}!\n💰 Balance: ${cat['coins']}",
-            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ Back", callback_data="shop:back")]])
+            f"✅ Purchased *{item.replace('_',' ').title()}*\n💰 Balance: ${cat['coins']}",
+            parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ Back", callback_data="shop:items")]])
         )
-
-    # ===== BACK BUTTON =====
-    elif data == "shop:back":
-        keyboard = [[InlineKeyboardButton(i.replace('_',' ').title(), callback_data=f"shop:view:{i}")] for i in SHOP_ITEMS]
-        keyboard.append([InlineKeyboardButton("🎁 Gift Shop", callback_data="giftshop:open")])
-        await query.edit_message_text("🛒 *Catverse Black Market*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
-
-    # ===== OPEN GIFT SHOP =====
-    elif data == "giftshop:open":
-        keyboard = [[InlineKeyboardButton(f"{v['emoji']} {k.title()} - ${v['price']}", callback_data=f"giftshop:view:{k}")] for k,v in GIFT_ITEMS.items()]
-        keyboard.append([InlineKeyboardButton("⬅ Back", callback_data="shop:back")])
-        await query.edit_message_text("🎁 *Gift Shop*", parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
     # ===== VIEW GIFT =====
     elif data.startswith("giftshop:view:"):
         item = data.split(":")[2]
         info = GIFT_ITEMS[item]
         owned = cat["inventory"].get(item, 0)
+
         text = f"{info['emoji']} *{item.title()}*\n\n💰 Price: *${info['price']}*\n📦 Owned: *{owned}*"
         keyboard = [
             [InlineKeyboardButton("🛒 Buy Gift", callback_data=f"giftshop:buy:{item}")],
@@ -492,14 +519,15 @@ async def shop_system(update: Update, context: ContextTypes.DEFAULT_TYPE):
         price = GIFT_ITEMS[item]["price"]
 
         if cat["coins"] < price:
-            return await query.answer("💸 Not enough coins!", show_alert=True)
+            return await query.answer("💸 You don't have enough coins!", show_alert=True)
 
         cat["coins"] -= price
         cat["inventory"][item] = cat["inventory"].get(item, 0) + 1
-        cats.update_one({"_id": cat["_id"]}, {"$set": {"coins": cat['coins'], "inventory": cat["inventory"]}})
+        cats.update_one({"_id": cat["_id"]}, {"$set": {"coins": cat["coins"], "inventory": cat["inventory"]}})
 
         await query.edit_message_text(
-            f"🎁 Gift Purchased: {GIFT_ITEMS[item]['emoji']} {item.title()}",
+            f"🎁 Gift Purchased: {GIFT_ITEMS[item]['emoji']} *{item.title()}*\n💰 Balance: ${cat['coins']}",
+            parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("⬅ Back", callback_data="giftshop:open")]])
         )
 
