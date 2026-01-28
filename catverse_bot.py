@@ -47,7 +47,7 @@ def get_cat(user):
         "kills": 0,
         "deaths": 0,
         "premium": True,
-        "inventory": {item: 0 for item in SHOP_ITEMS},
+        "inventory": {**{item: 0 for item in SHOP_ITEMS}, **{gift: 0 for gift in GIFT_ITEMS}},
         "dna": {"aggression": 1, "intelligence": 1, "luck": 1, "charm": 1},
         "level": "🐱 Kitten",
         "last_msg": 0,
@@ -200,26 +200,23 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     cats.update_one({"_id": cat["_id"]}, {"$set": cat})
     
-# ---------------- FISH COMMAND ----------------
 async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     cat = get_cat(user)
     inventory = cat.get("inventory", {})
     now = datetime.now(timezone.utc)
 
-    # ---------------- STREAK SYSTEM ----------------
     today = now.date().isoformat()
     last_date = cat.get("last_fish_date")
     streak = cat.get("fish_streak", 0)
+
     if last_date == today:
         streak += 1
     else:
         streak = 1
-    cat["fish_streak"] = streak
-    cat["last_fish_date"] = today
+
     streak_bonus = min(streak * 20, 200)
 
-    # ---------------- BAIT BONUS ----------------
     bait_bonus = 0
     bait_msg = ""
     if inventory.get("fish_bait", 0) > 0:
@@ -249,40 +246,72 @@ async def fish(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🏴‍☠️ Pirates stole catch!",
     ]
 
-    reward = 0
+    coins_change = 0
+    msg = ""
 
-    # ---------------- JACKPOT ----------------
-    if roll == 1:  # 1% jackpot
-        reward = random.randint(5000, 10000) + bait_bonus + streak_bonus
-        cat["coins"] += reward
-        msg = f"{bait_msg}{random.choice(jackpot_msgs)}\n🔥 JACKPOT! +🪙 {reward}"
-    elif 2 <= roll <= 71:  # 70% normal gain
-        reward = random.randint(400, 1000) + bait_bonus + streak_bonus
-        cat["coins"] += reward
-        msg = f"{bait_msg}{random.choice(profit_msgs)}\n💰 +🪙 {reward}\n🎁 Streak Bonus: {streak_bonus}"
-    else:  # 29% loss
+    # 🎉 JACKPOT
+    if roll == 1:
+        base = random.randint(5000, 10000)
+        total = base + bait_bonus + streak_bonus
+        coins_change = total
+        msg = (
+            f"{bait_msg}{random.choice(jackpot_msgs)}\n"
+            f"💰 Base Catch: {base}\n"
+            f"🎁 Streak Bonus: {streak_bonus}\n"
+            f"✨ Bait Bonus: {bait_bonus}\n"
+            f"🔥 JACKPOT TOTAL: +🪙 {total}"
+        )
+
+    # 🟢 NORMAL PROFIT
+    elif 2 <= roll <= 71:
+        base = random.randint(400, 1000)
+        total = base + bait_bonus + streak_bonus
+        coins_change = total
+        msg = (
+            f"{bait_msg}{random.choice(profit_msgs)}\n"
+            f"💰 Base Catch: {base}\n"
+            f"🎁 Streak Bonus: {streak_bonus}\n"
+            f"✨ Bait Bonus: {bait_bonus}\n"
+            f"🪙 TOTAL GAIN: +{total}"
+        )
+
+    # 🔴 LOSS
+    else:
         loss = random.randint(1000, 2000)
-        if cat["coins"] < loss:
-            loss = max(50, int(cat["coins"] * 0.5))
-        cat["coins"] -= loss
+        current = cat.get("coins", 0)
+
+        if current < loss:
+            loss = max(50, int(current * 0.5))
+
+        coins_change = -loss
         msg = f"{random.choice(loss_msgs)}\n💸 Lost 🪙 {loss}"
 
-    # ---------------- LEADERBOARD TRACK ----------------
-    if reward > 0:
-        cat["fish_total_earned"] = cat.get("fish_total_earned", 0) + reward
+    new_balance = max(0, cat.get("coins", 0) + coins_change)
 
-    # ---------------- SAVE ----------------
-    cat["inventory"] = inventory
+    update_data = {
+        "coins": new_balance,
+        "fish_streak": streak,
+        "last_fish_date": today,
+        "inventory": inventory,
+    }
+
+    if coins_change > 0:
+        update_data["fish_total_earned"] = cat.get("fish_total_earned", 0) + coins_change
+
+    cats.update_one({"_id": user.id}, {"$set": update_data})
+
     await update.message.reply_text(msg)
 
 # ---------------- LEADERBOARD ----------------
 async def fishlb(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    top = sorted(cats.values(), key=lambda x: x.get("fish_total_earned", 0), reverse=True)[:5]
-    text = "🏆 Top Fishing Legends 🏆\n\n"
-    for i, u in enumerate(top, start=1):
-        text += f"{i}. {u.get('name','Cat')} — 🪙 {u.get('fish_total_earned',0)}\n"
-    await update.message.reply_text(text)
+    top_users = cats.find().sort("fish_total_earned", -1).limit(5)
 
+    text = "🏆 Top Fishing Legends 🏆\n\n"
+    for i, u in enumerate(top_users, start=1):
+        text += f"{i}. {u.get('name','Cat')} — 🪙 {u.get('fish_total_earned',0)}\n"
+
+    await update.message.reply_text(text)
+    
 # ---- /xp command ----
 async def xp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
