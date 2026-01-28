@@ -1175,41 +1175,47 @@ async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= /lobu Command =================
 async def lobu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Sirf owner use kar sakta
     if not is_owner_user(update.effective_user.id):
         return await update.message.reply_text(
             "🚫 Sorry! Only the OWNER can use this command!"
         )
 
+    # ✅ Reply aur amount check
     if not update.message.reply_to_message or not context.args:
         return await update.message.reply_text(
             "Usage: /lobu <amount> (reply to a user)"
         )
 
+    # ✅ Amount parse karna
     try:
         amount = int(context.args[0])
     except:
         return await update.message.reply_text("❌ Enter a valid number!")
 
-    # Target user
+    # ✅ Target user
     target_user = update.message.reply_to_message.from_user
     target = get_cat(target_user)
 
-    # Owner coins = infinite
+    # ✅ Owner coins = infinite
     cat_owner = get_cat(update.effective_user)
     cat_owner["coins"] = float("inf")
-    cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})  # ✅ update DB
+    cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})  # DB update
 
-    # Add coins to target user
+    # ✅ Target ko coins add karna
     target["coins"] += amount
-    cats.update_one({"_id": target["_id"]}, {"$set": target})  # ✅ update DB
+    cats.update_one({"_id": target["_id"]}, {"$set": target})  # DB update
 
+    # ✅ Mention
     mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
-await update.message.reply_text(
-    f"👑 Owner Power Activated!\n\n"
-    f"✨ {mention} just received ${amount} instantly!\n"
-    f"💰 Owner's magic never fails!",
-    parse_mode="HTML"  # ✅ HTML mode for clickable mentions
-)
+
+    # ✅ Reply message (proper indentation inside function)
+    await update.message.reply_text(
+        f"👑 Owner Power Activated!\n\n"
+        f"✨ {mention} just received ${amount} instantly!\n"
+        f"💰 Owner's magic never fails!",
+        parse_mode="HTML"  # HTML mode for clickable mentions
+    )
     
 # ================= FUN COMMAND =================
 
