@@ -426,8 +426,17 @@ async def bal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"💰 Balance: ${cat['coins']}")
 
 
-# 💸 GIVE MONEY
+# 💸 GIVE MONEY (with OWNER protection)
 async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar reply kiya gaya user OWNER hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Hold on! This cat is the OWNER of the bot 😼\n"
+            "💰 You can't give or take money from them.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if not update.message.reply_to_message or not context.args:
         return await update.message.reply_text("❗ Reply with /give <amount>")
 
@@ -793,9 +802,18 @@ async def moon_mere_papa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 # ================= ROB =================
     
-# ================= ROB =================
-    
 async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar reply kiya gaya user OWNER hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Stop right there!\n"
+            "Ye koi normal cat nahi 😼\n"
+            "✨ This is the OWNER of the bot.\n"
+            "⚠️ Tumhari robbery yahin fail hoti hai.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if update.effective_chat.type == "private":
         return await update.message.reply_text("❌ Rob works in groups only.")
     if not update.message.reply_to_message:
@@ -881,9 +899,21 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except:
         pass  # user may have DMs closed
+        
+# ================= /kill =================
 
-# ================= KILL =================
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar target owner hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Hold up!\n"
+            "Ye koi normal cat nahi 😼\n"
+            "✨ This is the OWNER of the bot.\n"
+            "⚠️ Tumhari command yahin khatam hoti hai.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if not update.message.reply_to_message:
         return await update.message.reply_text("Reply to attack someone.")
 
@@ -901,7 +931,7 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attacker_mention = f"<a href='tg://user?id={attacker_user.id}'>{attacker_user.first_name}</a>"
     victim_mention = f"<a href='tg://user?id={victim_user.id}'>{victim_user.first_name}</a>"
 
-    # 🛡 PROTECTION CHECK (same system style as rob)
+    # 🛡 PROTECTION CHECK
     if victim["inventory"].get("vip_shield", 0) > 0:
         return await update.message.reply_text(
             f"👑 {victim_mention} is protected by a VIP Shield!",
@@ -1142,32 +1172,48 @@ async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ================= /lobu Command =================
 async def lobu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # Only owner can use
     if not is_owner_user(update.effective_user.id):
-        return await update.message.reply_text("🚫 Only the owner can use this command!")
+        return await update.message.reply_text(
+            "🚫 Sorry! Only the OWNER can use this command!"
+        )
 
+    # Must reply to a user and provide amount
     if not update.message.reply_to_message or not context.args:
-        return await update.message.reply_text("Usage: /lobu <amount> (reply to a user)")
+        return await update.message.reply_text(
+            "Usage: /lobu <amount> (reply to a user)"
+        )
 
+    # Parse amount
     try:
         amount = int(context.args[0])
     except:
         return await update.message.reply_text("❌ Enter a valid number!")
 
+    # Get target cat
     target_user = update.message.reply_to_message.from_user
     target = get_cat(target_user)
 
-    # Owner ke pass infinite coins
+    # Owner coins = infinite
     cat_owner = get_cat(update.effective_user)
     cat_owner["coins"] = float("inf")
-    # cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})  # uncomment with your DB
+    # Uncomment with DB update
+    # cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})
 
-    # Target ko coins dena
+    # Add coins to target user
     target["coins"] += amount
-    # cats.update_one({"_id": target["_id"]}, {"$set": target})  # uncomment with your DB
+    # Uncomment with DB update
+    # cats.update_one({"_id": target["_id"]}, {"$set": target})
 
+    # Reply in owner-style
+    mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
     await update.message.reply_text(
-        f"👑 Owner gifted ${amount} to {target_user.first_name} without limits!"
+        f"👑 *Owner Power Activated!*\n\n"
+        f"✨ {mention} just received ${amount} instantly!\n"
+        f"💰 Owner's magic never fails!",
+        parse_mode=ParseMode.MARKDOWN
     )
+    
 # ================= FUN COMMAND =================
 
 async def fun(update: Update, context: ContextTypes.DEFAULT_TYPE):
