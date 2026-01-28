@@ -18,6 +18,7 @@ from telegram.ext import (
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 MONGO_URI = os.getenv("MONGO_URI")
+OWNER_ID = 7789325573
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
@@ -29,12 +30,17 @@ leaderboard_history = db["leaderboard_history"]
 
 LEVELS = [
     ("🐱 Kitten", 0),
-    ("😺 Teen Cat", 3000),
-    ("😼 Rogue Cat", 60000),
-    ("🐯 Alpha Cat", 100000),
-    ("👑 Legend Cat", 16000000),
+    ("😺 Teen Cat", 1000),
+    ("😼 Rogue Cat", 5000),
+    ("🐯 Alpha Cat", 20000),
+    ("👑 Legend Cat", 1600000),
 ]
 
+# ================= Helper Functions =================
+
+def is_owner_user(user_id: int) -> bool:
+    return user_id == OWNER_ID
+    
 # ================= DATABASE =================
 
 def get_cat(user):
@@ -102,7 +108,20 @@ def calculate_global_rank(user_id):
         if c["_id"] == user_id:
             return idx
     return 0
-
+    
+# 👑 OWNER GOD MODE
+    if is_owner_user(user.id):
+        cat["coins"] = float("inf")
+        cat["xp"] = float("inf")
+        cat["level"] = "👑 Legend Cat"
+        cat["dna"] = {
+            "aggression": 100,
+            "intelligence": 100,
+            "luck": 100,
+            "charm": 100,
+        }
+    return cat
+    
 # ================= GAME GUIDE =================
 
 async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -315,6 +334,24 @@ async def fishlb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---- /xp command ----
 async def xp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
+
+    # 👑 OWNER GOD MODE XP
+    if is_owner_user(update.effective_user.id):
+        text = (
+            f"👑 *OWNER GOD STATS*\n\n"
+            f"Level: 👑 Legend Cat\n"
+            f"XP: ∞\n\n"
+            f"🧬 DNA Stats:\n"
+            f"▫️ Aggression: 100\n"
+            f"▫️ Intelligence: 100\n"
+            f"▫️ Luck: 100\n"
+            f"▫️ Charm: 100\n"
+            f"🐟 Fish: ∞"
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        return
+
+    # 👤 NORMAL USER
     stats = cat["dna"]
     text = (
         f"📊 *Your Cat Stats*\n"
@@ -1068,15 +1105,29 @@ async def leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=leaderboard_buttons()
     )
 
-# ================= PROFILE =================
+# ================= /me Command =================
 async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Agar reply kiya ya user mention kiya
     target_user = update.message.reply_to_message.from_user if update.message.reply_to_message else update.effective_user
     cat = get_cat(target_user)
+
+    # 👑 OWNER PROFILE
+    if is_owner_user(target_user.id):
+        mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
+        await update.message.reply_text(
+            f"👑 {mention} — <b>CATVERSE OWNER</b>\n\n"
+            f"<b>🐾 Level:</b> 👑 Legend Cat\n"
+            f"<b>💰 Money:</b> ∞\n"
+            f"<b>🏆 Rank:</b> #∞\n"
+            f"<b>🐟 Fish:</b> ∞\n"
+            f"<b>⚔️ Wins:</b> ∞ | <b>💀 Deaths:</b> 0\n\n"
+            f"<b>DNA →</b> 😼 100 | 🧠 100 | 🍀 100 | 💖 100\n"
+            f"✨ <i>The one who rules Catverse</i>",
+            parse_mode="HTML"
+        )
+        return
+
     d = cat["dna"]
     rank = calculate_global_rank(cat["_id"])
-
-    # Clickable name
     mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
 
     await update.message.reply_text(
@@ -1089,6 +1140,34 @@ async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+# ================= /lobu Command =================
+async def lobu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_owner_user(update.effective_user.id):
+        return await update.message.reply_text("🚫 Only the owner can use this command!")
+
+    if not update.message.reply_to_message or not context.args:
+        return await update.message.reply_text("Usage: /lobu <amount> (reply to a user)")
+
+    try:
+        amount = int(context.args[0])
+    except:
+        return await update.message.reply_text("❌ Enter a valid number!")
+
+    target_user = update.message.reply_to_message.from_user
+    target = get_cat(target_user)
+
+    # Owner ke pass infinite coins
+    cat_owner = get_cat(update.effective_user)
+    cat_owner["coins"] = float("inf")
+    # cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})  # uncomment with your DB
+
+    # Target ko coins dena
+    target["coins"] += amount
+    # cats.update_one({"_id": target["_id"]}, {"$set": target})  # uncomment with your DB
+
+    await update.message.reply_text(
+        f"👑 Owner gifted ${amount} to {target_user.first_name} without limits!"
+    )
 # ================= FUN COMMAND =================
 
 async def fun(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1157,6 +1236,7 @@ def main():
     app.add_handler(CommandHandler("games", games))
     app.add_handler(CommandHandler("xp", xp))
     app.add_handler(CommandHandler("me", me))
+    app.add_handler(CommandHandler("lobu", lobu))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("claim", claim))
     app.add_handler(CommandHandler("bal", bal))
