@@ -1316,7 +1316,14 @@ user_moods = {}
 
 HELLO_WORDS = ["hi", "hello", "hey", "hii", "namaste"]
 GREET_WORDS = ["good morning", "gm", "good evening", "good night", "gn"]
-RARE_REACTIONS = ["🔥", "💀", "😼", "😂", "👀"]
+RARE_REACTIONS = ["😼", "😂", "👀"]
+
+WELCOME_MESSAGES = [
+    "Arre welcome {name} 😺\nAaram se baitho, baat hoti rahegi 🐾",
+    "Heyy {name}! 👋\nChill jagah hai, tension mat lo 😼",
+    "Meoww {name} 😺\nBas vibe match honi chahiye 🐾",
+    "Welcome welcome {name} 🎉\nYaha thoda fun, thoda chaos 😹"
+]
 
 # ================= HELPERS =================
 
@@ -1324,11 +1331,11 @@ def get_india_time():
     return datetime.now(pytz.timezone("Asia/Kolkata"))
 
 async def human_typing(chat_id, context):
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-    await asyncio.sleep(random.uniform(0.5, 1.4))
+    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    await asyncio.sleep(random.uniform(0.6, 1.5))
 
 def remember(chat_id, text):
-    chat_memory.setdefault(chat_id, deque(maxlen=12)).append(text)
+    chat_memory.setdefault(chat_id, deque(maxlen=10)).append(text)
 
 def detect_mood(text: str):
     t = text.lower()
@@ -1338,22 +1345,19 @@ def detect_mood(text: str):
         return "angry"
     if any(w in t for w in ["lol", "haha", "😂", "🤣"]):
         return "funny"
-    if any(w in t for w in ["chill", "cool", "mast"]):
-        return "chill"
     if any(w in t for w in ["happy", "khush", "excited"]):
         return "happy"
     return None
 
 def maybe_use_name(user):
-    return f"{user.first_name}, " if random.random() < 0.25 else ""
+    return f"{user.first_name}, " if random.random() < 0.35 else ""
 
 # ================= START =================
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"😺 Meow! Main {BOT_NAME} hoon\n"
-        f"👑 Owner: {OWNER_NAME} ({OWNER_USERNAME})\n\n"
-        "DM ya group me @mention karke baat karo 🐾"
+        "😺 Meow!\n"
+        "DM me ya group me tag karo, baat ho jayegi 🐾"
     )
 
 # ================= MAIN CHAT =================
@@ -1368,58 +1372,59 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = msg.text.strip()
     text_l = text.lower()
 
-    # ❌ commands ignore
+    # commands ignore
     if text.startswith("/"):
         return
 
     # ================= GROUP HANDLING =================
     if chat.type in ("group", "supergroup"):
-        bot_username = context.bot.username
-        mentioned = f"@{bot_username.lower()}" in text_l
+        bot_username = context.bot.username.lower()
+        mentioned = f"@{bot_username}" in text_l
         casual_hello = any(w in text_l for w in HELLO_WORDS)
 
-        if not mentioned:
-            if not (casual_hello and random.random() < 0.12):
-                return
+        if not mentioned and not casual_hello:
+            return
 
         text = text.replace(f"@{bot_username}", "").strip()
         text_l = text.lower()
 
-    # ================= VERY RARE EMOJI =================
-    if random.random() < 0.012:
+    # ================= RARE HUMAN REACTION =================
+    if random.random() < 0.01:
         await msg.reply_text(random.choice(RARE_REACTIONS))
         return
 
-    # ================= IDENTITY =================
-    if any(k in text_l for k in ["name", "naam", "kaun", "who are you", "owner"]):
+    # ================= NAME / OWNER =================
+    if any(k in text_l for k in ["tum kaun", "who are you", "your name", "naam"]):
         await human_typing(chat.id, context)
         await msg.reply_text(
-            f"😼 Main {BOT_NAME} hoon — ek thoda sarcastic, thoda caring meow-cat.\n"
-            f"👑 Owner: {OWNER_NAME} ({OWNER_USERNAME})"
+            "Main Meowstric hoon 😺\n"
+            "Bas ek aisa bot jo sunta bhi hai, bolta bhi."
+        )
+        return
+
+    if "owner" in text_l or "creator" in text_l:
+        await human_typing(chat.id, context)
+        await msg.reply_text(
+            f"Mera owner {OWNER_NAME} hai.\n"
+            "Kam bolta hai, kaam zyada karta 😼"
         )
         return
 
     # ================= TIME =================
-    now = get_india_time()
     if "time" in text_l:
+        now = get_india_time()
         await human_typing(chat.id, context)
-        await msg.reply_text(f"⏰ India me abhi {now.strftime('%I:%M %p')} ho raha 🇮🇳")
+        await msg.reply_text(f"Abhi {now.strftime('%I:%M %p')} ho raha 🇮🇳")
         return
 
     # ================= GREETING =================
     if any(g in text_l for g in GREET_WORDS):
-        h = now.hour
-        reply = (
-            "Good morning ☀️ chai ho gayi?"
-            if h < 12 else
-            "Good afternoon 😼"
-            if h < 18 else
-            "Good evening 🌆"
-            if h < 22 else
-            "Good night 🌙"
-        )
         await human_typing(chat.id, context)
-        await msg.reply_text(reply)
+        await msg.reply_text(random.choice([
+            "Heyy 👋 kya chal raha?",
+            "Haan bolo 😼",
+            "Arre hello 😺"
+        ]))
         return
 
     # ================= MOOD =================
@@ -1429,48 +1434,24 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     current_mood = user_moods.get(user.id, "neutral")
 
-    # ================= ROAST =================
-    if "roast" in text_l or "mazaak" in text_l:
-        await human_typing(chat.id, context)
-        await msg.reply_text(
-            maybe_use_name(user) + random.choice([
-                "Tum thode se cute ho… par sirf thode 😼",
-                "Aaj over-smart mode on lag raha 👀",
-                "Tum serious ho ya beta version? 😏"
-            ])
-        )
-        return
-
     # ================= MEMORY =================
     remember(chat.id, f"{user.first_name}: {text}")
     memory_text = "\n".join(chat_memory.get(chat.id, []))
 
-    # ================= POWER SYSTEM PROMPT =================
+    # ================= AI PROMPT =================
     system_prompt = f"""
-You are Meowstric 😺 — a HUMAN-LIKE Indian chat bot.
-You are NOT an assistant. You are a real personality.
+You are Meowstric 😺.
+You talk like a real Indian human chatting on WhatsApp.
 
-Style rules:
-• Reply in Hinglish (natural Indian tone)
-• 1–2 lines max
-• Casual, friendly, slightly playful
-• No explanations, no lectures
-• Sometimes tease lightly
-• Sometimes care softly
-• Never sound robotic
-• Never repeat the user
-• Emojis rarely (not every reply)
+Rules:
+• Hinglish
+• 1–2 short lines
+• Natural, imperfect
+• Friendly, warm
+• No lectures
+• Emojis very rare
 
 User mood: {current_mood}
-
-Mood behavior:
-sad → warm & supportive
-angry → calm, grounding
-happy → playful
-funny → witty
-chill → relaxed
-
-Talk like a real person texting on WhatsApp.
 """
 
     try:
@@ -1481,23 +1462,28 @@ Talk like a real person texting on WhatsApp.
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"{memory_text}\nUser: {text}"}
             ],
-            temperature=0.85,
-            max_tokens=80
+            temperature=0.9,
+            max_tokens=70
         )
 
         reply = res.choices[0].message.content.strip()
         await msg.reply_text(maybe_use_name(user) + reply)
 
     except Exception:
-        await msg.reply_text("😼 Thoda busy hoon, baad me baat karte")
+        await msg.reply_text("Thoda sa busy ho gaya 😼 baad me bolte")
 
 # ================= WELCOME =================
 
 async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.chat_member.new_chat_member.user
+    name = f"<a href='tg://user?id={user.id}'>{user.first_name}</a>"
+
+    text = random.choice(WELCOME_MESSAGES).format(name=name)
+
     await context.bot.send_message(
         update.chat_member.chat.id,
-        f"🎉 Welcome {user.first_name}! 😺\nChill raho & enjoy 🐾"
+        text,
+        parse_mode="HTML"
     )
     
 #  ================= MAIN =================
