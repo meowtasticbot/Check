@@ -2390,12 +2390,6 @@ async def handle_all_messages(message: Message, state: FSMContext):
         # Send response
         await message.reply(response)
     
-# ================= COMMAND HANDLERS PLACEHOLDER =================
-# Define all your functions like games, xp, me, lobu, daily, claim, bal, give, gift, use, shop_system, rob, fish, moon_mere_papa, kill, protect, toprich, topkill, shop, inventory, fun, upgrade, fishlb, start, welcome, on_chat here
-# Example:
-async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎮 Games command works!")
-
 # ================= HEALTH CHECK SERVER =================
 async def handle_ping(request):
     return web.Response(text="🤖 Bot is Alive and Running!")
@@ -2411,18 +2405,20 @@ async def start_server():
     print(f"🌐 Health server started on port {PORT}")
 
 # ================= MAIN BOT =================
-async def main():
+def main():
     print("=" * 50)
     print("🤖 CATVERSE TELEGRAM BOT")
-    print(f"🚀 Version: 3.0 - FULLY MERGED")
-    print(f"🕒 Indian Timezone: Asia/Kolkata")
+    print("🚀 Version: 3.0 - FULLY MERGED")
+    print("🕒 Indian Timezone: Asia/Kolkata")
     print("=" * 50)
 
-    # Start health check server
-    asyncio.create_task(start_server())
-
-    # Build PTB Application
     app = ApplicationBuilder().token(BOT_TOKEN).build()
+
+    # 🔥 start health server safely (NO event-loop conflict)
+    async def on_startup(app):
+        asyncio.create_task(start_server())
+
+    app.post_init = on_startup
 
     # ========== ADD COMMAND HANDLERS ==========
     app.add_handler(CommandHandler("games", games))
@@ -2450,12 +2446,11 @@ async def main():
     app.add_handler(CommandHandler("fun", fun))
     app.add_handler(CommandHandler("upgrade", upgrade))
     app.add_handler(CommandHandler("fishlb", fishlb))
-    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
 
     print("🐱 CATVERSE FULLY UPGRADED & RUNNING...")
-    await app.run_polling()
+    app.run_polling()
 
 # ================= RUN =================
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
