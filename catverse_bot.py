@@ -1060,6 +1060,7 @@ def leaderboard_buttons():
     keyboard = [[
         InlineKeyboardButton("🏆 Richest Cats", callback_data="lb_rich"),
         InlineKeyboardButton("⚔️ Top Fighters", callback_data="lb_kill"),
+        InlineKeyboardButton("🎣 Top Fishers", callback_data="lb_fish")
     ]]
     return InlineKeyboardMarkup(keyboard)
 
@@ -1087,7 +1088,7 @@ def get_rank_arrow(user_id: int, board_type: str, new_rank: int) -> str:
 
 # ================= BUILD RICH BOARD =================
 def build_rich_board():
-    top = cats.find().sort("coins", -1).limit(10)
+    top = cats.find({"_id": {"$ne": OWNER_ID}}).sort("coins", -1).limit(10)
     msg = "<b>🏆 Top Rich Cats</b>\n\n"
 
     for i, c in enumerate(top, 1):
@@ -1105,7 +1106,7 @@ def build_rich_board():
 
 # ================= BUILD KILL BOARD =================
 def build_kill_board():
-    top = cats.find().sort("kills", -1).limit(10)
+    top = cats.find({"_id": {"$ne": OWNER_ID}}).sort("kills", -1).limit(10)
     msg = "<b>⚔️ Top Fighters</b>\n\n"
 
     for i, c in enumerate(top, 1):
@@ -1121,8 +1122,24 @@ def build_kill_board():
 
     return msg
 
-# ================= COMMANDS =================
-async def toprich(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# ================= BUILD FISH BOARD =================
+def build_fish_board():
+    top = cats.find({"_id": {"$ne": OWNER_ID}}).sort("fish_total_earned", -1).limit(10)
+    msg = "<b>🎣 Top Fishing Legends</b>\n\n"
+
+    for i, u in enumerate(top, start=1):
+        user_id = u["_id"]
+        name = u.get("name", "Cat")
+        fish_earned = u.get("fish_total_earned", 0)
+        badge = rank_decor(i)
+        arrow = get_rank_arrow(user_id, "fish", i)
+        mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
+        msg += f"{badge} {i}. {mention} {arrow} — 🪙 {fish_earned}\n"
+
+    return msg
+
+# ================= COMMAND =================
+async def leaderboard_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     msg = build_rich_board()
     await update.message.reply_text(
         msg,
@@ -1130,23 +1147,19 @@ async def toprich(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=leaderboard_buttons()
     )
 
-async def topkill(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = build_kill_board()
-    await update.message.reply_text(
-        msg,
-        parse_mode=ParseMode.HTML,
-        reply_markup=leaderboard_buttons()
-    )
-
-# ================= BUTTON SWITCH =================
+# ================= CALLBACK =================
 async def leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
 
     if query.data == "lb_rich":
         msg = build_rich_board()
-    else:
+    elif query.data == "lb_kill":
         msg = build_kill_board()
+    elif query.data == "lb_fish":
+        msg = build_fish_board()
+    else:
+        msg = "❌ Unknown leaderboard."
 
     await query.edit_message_text(
         msg,
@@ -1522,6 +1535,7 @@ def main():
     app.add_handler(CommandHandler("toprich", toprich))
     app.add_handler(CommandHandler("topkill", topkill))
     app.add_handler(CallbackQueryHandler(leaderboard_callback, pattern="^lb_"))
+    app.add_handler(CommandHandler("leaderboard", leaderboard_cmd))
     app.add_handler(CommandHandler("shop", shop))
     app.add_handler(CommandHandler("inventory", inventory))
     app.add_handler(CallbackQueryHandler(shop_system, pattern="^shop:"))
