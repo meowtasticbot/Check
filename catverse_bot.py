@@ -1,23 +1,43 @@
+# ================= BASIC =================
 import os
 import random
+import asyncio
 import time
 from datetime import datetime, timedelta, timezone
+from collections import deque
+
+# ================= TIMEZONE =================
+import pytz
+
+# ================= AI =================
+from groq import AsyncGroq
+
+# ================= DATABASE =================
 from pymongo import MongoClient
+
+# ================= TELEGRAM =================
+from telegram import (
+    Update,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton
+)
 from telegram.constants import ParseMode
-from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
+
 from telegram.ext import (
     ApplicationBuilder,
+    ContextTypes,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    ContextTypes,
-    filters,
+    ChatMemberHandler,
+    filters
 )
 
 # ================= CONFIG =================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-MONGO_URI = os.getenv("MONGO_URI")
+BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAFv6W8hrxkNHEmWF6hcBF5MoX_XPQG18Dk")
+MONGO_URI = os.getenv("MONGO_URI","mongodb+srv://meowstriccat:S8yXruYmreTv0sSp@cluster0.gdat6xv.mongodb.net/?appName=Cluster0")
+OWNER_ID = 7789325573
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
@@ -29,12 +49,17 @@ leaderboard_history = db["leaderboard_history"]
 
 LEVELS = [
     ("🐱 Kitten", 0),
-    ("😺 Teen Cat", 3000),
-    ("😼 Rogue Cat", 60000),
-    ("🐯 Alpha Cat", 100000),
-    ("👑 Legend Cat", 16000000),
+    ("😺 Teen Cat", 1000),
+    ("😼 Rogue Cat", 5000),
+    ("🐯 Alpha Cat", 20000),
+    ("👑 Legend Cat", 1600000),
 ]
 
+# ================= Helper Functions =================
+
+def is_owner_user(user_id: int) -> bool:
+    return user_id == OWNER_ID
+    
 # ================= DATABASE =================
 
 def get_cat(user):
@@ -102,7 +127,20 @@ def calculate_global_rank(user_id):
         if c["_id"] == user_id:
             return idx
     return 0
-
+    
+# 👑 OWNER GOD MODE
+    if is_owner_user(user.id):
+        cat["coins"] = float("inf")
+        cat["xp"] = float("inf")
+        cat["level"] = "👑 Legend Cat"
+        cat["dna"] = {
+            "aggression": 100,
+            "intelligence": 100,
+            "luck": 100,
+            "charm": 100,
+        }
+    return cat
+    
 # ================= GAME GUIDE =================
 
 async def games(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -315,6 +353,24 @@ async def fishlb(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ---- /xp command ----
 async def xp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     cat = get_cat(update.effective_user)
+
+    # 👑 OWNER GOD MODE XP
+    if is_owner_user(update.effective_user.id):
+        text = (
+            f"👑 *OWNER GOD STATS*\n\n"
+            f"Level: 👑 Legend Cat\n"
+            f"XP: ∞\n\n"
+            f"🧬 DNA Stats:\n"
+            f"▫️ Aggression: 100\n"
+            f"▫️ Intelligence: 100\n"
+            f"▫️ Luck: 100\n"
+            f"▫️ Charm: 100\n"
+            f"🐟 Fish: ∞"
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN)
+        return
+
+    # 👤 NORMAL USER
     stats = cat["dna"]
     text = (
         f"📊 *Your Cat Stats*\n"
@@ -389,8 +445,17 @@ async def bal(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"💰 Balance: ${cat['coins']}")
 
 
-# 💸 GIVE MONEY
+# 💸 GIVE MONEY (with OWNER protection)
 async def give(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar reply kiya gaya user OWNER hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Hold on! This cat is the OWNER of the bot 😼\n"
+            "💰 You can't give or take money from them.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if not update.message.reply_to_message or not context.args:
         return await update.message.reply_text("❗ Reply with /give <amount>")
 
@@ -756,9 +821,18 @@ async def moon_mere_papa(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 # ================= ROB =================
     
-# ================= ROB =================
-    
 async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar reply kiya gaya user OWNER hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Stop right there!\n"
+            "Ye koi normal cat nahi 😼\n"
+            "✨ This is the OWNER of the bot.\n"
+            "⚠️ Tumhari robbery yahin fail hoti hai.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if update.effective_chat.type == "private":
         return await update.message.reply_text("❌ Rob works in groups only.")
     if not update.message.reply_to_message:
@@ -844,9 +918,21 @@ async def rob(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     except:
         pass  # user may have DMs closed
+        
+# ================= /kill =================
 
-# ================= KILL =================
 async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ❌ OWNER PROTECTION: Agar target owner hai
+    if update.message.reply_to_message and is_owner_user(update.message.reply_to_message.from_user.id):
+        await update.message.reply_text(
+            "👑 Hold up!\n"
+            "Ye koi normal cat nahi 😼\n"
+            "✨ This is the OWNER of the bot.\n"
+            "⚠️ Tumhari command yahin khatam hoti hai.",
+            parse_mode=ParseMode.MARKDOWN
+        )
+        return
+
     if not update.message.reply_to_message:
         return await update.message.reply_text("Reply to attack someone.")
 
@@ -864,7 +950,7 @@ async def kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     attacker_mention = f"<a href='tg://user?id={attacker_user.id}'>{attacker_user.first_name}</a>"
     victim_mention = f"<a href='tg://user?id={victim_user.id}'>{victim_user.first_name}</a>"
 
-    # 🛡 PROTECTION CHECK (same system style as rob)
+    # 🛡 PROTECTION CHECK
     if victim["inventory"].get("vip_shield", 0) > 0:
         return await update.message.reply_text(
             f"👑 {victim_mention} is protected by a VIP Shield!",
@@ -1000,38 +1086,40 @@ def get_rank_arrow(user_id: int, board_type: str, new_rank: int) -> str:
     return "➖"
 
 # ================= BUILD RICH BOARD =================
+
 def build_rich_board():
-    top = cats.find().sort("coins", -1).limit(10)
+    top = cats.find({"_id": {"$ne": OWNER_ID}}).sort("coins", -1).limit(10)  # exclude owner
     msg = "<b>🏆 Top Rich Cats</b>\n\n"
 
-    for i, c in enumerate(top, 1):
-        user_id = c["_id"]
-        name = c.get("name", "Cat")
-        coins = c.get("coins", 0)
+    for i, c in enumerate(top, 1):  
+        user_id = c["_id"]  
+        name = c.get("name", "Cat")  
+        coins = c.get("coins", 0)  
 
-        badge = rank_decor(i)
-        arrow = get_rank_arrow(user_id, "rich", i)
-        mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
+        badge = rank_decor(i)  
+        arrow = get_rank_arrow(user_id, "rich", i)  
+        mention = f"<a href='tg://user?id={user_id}'>{name}</a>"  
 
-        msg += f"{badge} {i}. {mention} {arrow} — ${coins}\n"
+        msg += f"{badge} {i}. {mention} {arrow} — ${coins}\n"  
 
     return msg
 
-# ================= BUILD KILL BOARD =================
+#================= BUILD KILL BOARD =================
+
 def build_kill_board():
-    top = cats.find().sort("kills", -1).limit(10)
+    top = cats.find({"_id": {"$ne": OWNER_ID}}).sort("kills", -1).limit(10)  # exclude owner
     msg = "<b>⚔️ Top Fighters</b>\n\n"
 
-    for i, c in enumerate(top, 1):
-        user_id = c["_id"]
-        name = c.get("name", "Cat")
-        kills = c.get("kills", 0)
+    for i, c in enumerate(top, 1):  
+        user_id = c["_id"]  
+        name = c.get("name", "Cat")  
+        kills = c.get("kills", 0)  
 
-        badge = rank_decor(i)
-        arrow = get_rank_arrow(user_id, "kill", i)
-        mention = f"<a href='tg://user?id={user_id}'>{name}</a>"
+        badge = rank_decor(i)  
+        arrow = get_rank_arrow(user_id, "kill", i)  
+        mention = f"<a href='tg://user?id={user_id}'>{name}</a>"  
 
-        msg += f"{badge} {i}. {mention} {arrow} — {kills} wins\n"
+        msg += f"{badge} {i}. {mention} {arrow} — {kills} wins\n"  
 
     return msg
 
@@ -1068,17 +1156,34 @@ async def leaderboard_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         reply_markup=leaderboard_buttons()
     )
 
-# ================= PROFILE =================
+# ================= /me Command =================
 async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Agar reply kiya ya user mention kiya
     target_user = update.message.reply_to_message.from_user if update.message.reply_to_message else update.effective_user
     cat = get_cat(target_user)
+
+    # 👑 OWNER PROFILE (GOD MODE)
+    if is_owner_user(target_user.id):
+        # Owner ke liye stats hardcode + infinite coins
+        mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
+        await update.message.reply_text(
+            f"👑 {mention} — <b>CATVERSE OWNER</b>\n\n"
+            f"<b>🐾 Level:</b> 👑 Legend Cat\n"
+            f"<b>💰 Money:</b> ∞\n"
+            f"<b>🏆 Rank:</b> #∞\n"
+            f"<b>🐟 Fish:</b> ∞\n"
+            f"<b>⚔️ Wins:</b> ∞ | <b>💀 Deaths:</b> 0\n\n"
+            f"<b>DNA →</b> 😼 100 | 🧠 100 | 🍀 100 | 💖 100\n"
+            f"✨ <i>The one who rules Catverse</i>",
+            parse_mode="HTML"
+        )
+        return
+
+    # 🐱 Normal users
     d = cat["dna"]
     rank = calculate_global_rank(cat["_id"])
-
-    # Clickable name
     mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
 
+    # Agar owner ne recently /lobu ya /give se coins diye, wo DB me update ho chuke honge, yahan latest show hoga
     await update.message.reply_text(
         f"🐾 {mention} — \n\n<b>🐾 Level:</b> {cat['level']}\n"
         f"<b>💰 Money:</b> ${cat['coins']}\n"
@@ -1089,6 +1194,50 @@ async def me(update: Update, context: ContextTypes.DEFAULT_TYPE):
         parse_mode="HTML"
     )
 
+# ================= /lobu Command =================
+async def lobu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    # ✅ Sirf owner use kar sakta
+    if not is_owner_user(update.effective_user.id):
+        return await update.message.reply_text(
+            "🚫 Sorry! Only the OWNER can use this command!"
+        )
+
+    # ✅ Reply aur amount check
+    if not update.message.reply_to_message or not context.args:
+        return await update.message.reply_text(
+            "Usage: /lobu <amount> (reply to a user)"
+        )
+
+    # ✅ Amount parse karna
+    try:
+        amount = int(context.args[0])
+    except:
+        return await update.message.reply_text("❌ Enter a valid number!")
+
+    # ✅ Target user
+    target_user = update.message.reply_to_message.from_user
+    target = get_cat(target_user)
+
+    # ✅ Owner coins = infinite
+    cat_owner = get_cat(update.effective_user)
+    cat_owner["coins"] = float("inf")
+    cats.update_one({"_id": cat_owner["_id"]}, {"$set": cat_owner})  # DB update
+
+    # ✅ Target ko coins add karna
+    target["coins"] += amount
+    cats.update_one({"_id": target["_id"]}, {"$set": target})  # DB update
+
+    # ✅ Mention
+    mention = f"<a href='tg://user?id={target_user.id}'>{target_user.first_name}</a>"
+
+    # ✅ Reply message (proper indentation inside function)
+    await update.message.reply_text(
+        f"👑 Owner Power Activated!\n\n"
+        f"✨ {mention} just received ${amount} instantly!\n"
+        f"💰 Owner's magic never fails!",
+        parse_mode="HTML"  # HTML mode for clickable mentions
+    )
+    
 # ================= FUN COMMAND =================
 
 async def fun(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1149,6 +1298,208 @@ async def upgrade(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"Current Level: {cat['level']}"
     )
 
+# ================= CONFIG =================
+
+BOT_NAME = "Meowstric 😺"
+OWNER_NAME = "Moon"
+OWNER_USERNAME = "@btw_moon"
+
+BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAFv6W8hrxkNHEmWF6hcBF5MoX_XPQG18Dk")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY","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")
+
+ai_client = AsyncGroq(api_key=GROQ_API_KEY)
+
+# ================= STATE =================
+
+chat_memory = {}
+user_moods = {}
+
+HELLO_WORDS = ["hi", "hello", "hey", "hii", "namaste"]
+GREET_WORDS = ["good morning", "gm", "good evening", "good night", "gn"]
+RARE_REACTIONS = ["🔥", "💀", "😼", "😂", "👀"]
+
+# ================= HELPERS =================
+
+def get_india_time():
+    return datetime.now(pytz.timezone("Asia/Kolkata"))
+
+async def human_typing(chat_id, context):
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+    await asyncio.sleep(random.uniform(0.5, 1.4))
+
+def remember(chat_id, text):
+    chat_memory.setdefault(chat_id, deque(maxlen=12)).append(text)
+
+def detect_mood(text: str):
+    t = text.lower()
+    if any(w in t for w in ["sad", "dukhi", "rona", "alone"]):
+        return "sad"
+    if any(w in t for w in ["gussa", "angry", "irritate"]):
+        return "angry"
+    if any(w in t for w in ["lol", "haha", "😂", "🤣"]):
+        return "funny"
+    if any(w in t for w in ["chill", "cool", "mast"]):
+        return "chill"
+    if any(w in t for w in ["happy", "khush", "excited"]):
+        return "happy"
+    return None
+
+def maybe_use_name(user):
+    return f"{user.first_name}, " if random.random() < 0.25 else ""
+
+# ================= START =================
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        f"😺 Meow! Main {BOT_NAME} hoon\n"
+        f"👑 Owner: {OWNER_NAME} ({OWNER_USERNAME})\n\n"
+        "DM ya group me @mention karke baat karo 🐾"
+    )
+
+# ================= MAIN CHAT =================
+
+async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
+
+    msg = update.message
+    chat = update.effective_chat
+    user = update.effective_user
+    text = msg.text.strip()
+    text_l = text.lower()
+
+    # ❌ commands ignore
+    if text.startswith("/"):
+        return
+
+    # ================= GROUP HANDLING =================
+    if chat.type in ("group", "supergroup"):
+        bot_username = context.bot.username
+        mentioned = f"@{bot_username.lower()}" in text_l
+        casual_hello = any(w in text_l for w in HELLO_WORDS)
+
+        if not mentioned:
+            if not (casual_hello and random.random() < 0.12):
+                return
+
+        text = text.replace(f"@{bot_username}", "").strip()
+        text_l = text.lower()
+
+    # ================= VERY RARE EMOJI =================
+    if random.random() < 0.012:
+        await msg.reply_text(random.choice(RARE_REACTIONS))
+        return
+
+    # ================= IDENTITY =================
+    if any(k in text_l for k in ["name", "naam", "kaun", "who are you", "owner"]):
+        await human_typing(chat.id, context)
+        await msg.reply_text(
+            f"😼 Main {BOT_NAME} hoon — ek thoda sarcastic, thoda caring meow-cat.\n"
+            f"👑 Owner: {OWNER_NAME} ({OWNER_USERNAME})"
+        )
+        return
+
+    # ================= TIME =================
+    now = get_india_time()
+    if "time" in text_l:
+        await human_typing(chat.id, context)
+        await msg.reply_text(f"⏰ India me abhi {now.strftime('%I:%M %p')} ho raha 🇮🇳")
+        return
+
+    # ================= GREETING =================
+    if any(g in text_l for g in GREET_WORDS):
+        h = now.hour
+        reply = (
+            "Good morning ☀️ chai ho gayi?"
+            if h < 12 else
+            "Good afternoon 😼"
+            if h < 18 else
+            "Good evening 🌆"
+            if h < 22 else
+            "Good night 🌙"
+        )
+        await human_typing(chat.id, context)
+        await msg.reply_text(reply)
+        return
+
+    # ================= MOOD =================
+    mood = detect_mood(text)
+    if mood:
+        user_moods[user.id] = mood
+
+    current_mood = user_moods.get(user.id, "neutral")
+
+    # ================= ROAST =================
+    if "roast" in text_l or "mazaak" in text_l:
+        await human_typing(chat.id, context)
+        await msg.reply_text(
+            maybe_use_name(user) + random.choice([
+                "Tum thode se cute ho… par sirf thode 😼",
+                "Aaj over-smart mode on lag raha 👀",
+                "Tum serious ho ya beta version? 😏"
+            ])
+        )
+        return
+
+    # ================= MEMORY =================
+    remember(chat.id, f"{user.first_name}: {text}")
+    memory_text = "\n".join(chat_memory.get(chat.id, []))
+
+    # ================= POWER SYSTEM PROMPT =================
+    system_prompt = f"""
+You are Meowstric 😺 — a HUMAN-LIKE Indian chat bot.
+You are NOT an assistant. You are a real personality.
+
+Style rules:
+• Reply in Hinglish (natural Indian tone)
+• 1–2 lines max
+• Casual, friendly, slightly playful
+• No explanations, no lectures
+• Sometimes tease lightly
+• Sometimes care softly
+• Never sound robotic
+• Never repeat the user
+• Emojis rarely (not every reply)
+
+User mood: {current_mood}
+
+Mood behavior:
+sad → warm & supportive
+angry → calm, grounding
+happy → playful
+funny → witty
+chill → relaxed
+
+Talk like a real person texting on WhatsApp.
+"""
+
+    try:
+        await human_typing(chat.id, context)
+        res = await ai_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"{memory_text}\nUser: {text}"}
+            ],
+            temperature=0.85,
+            max_tokens=80
+        )
+
+        reply = res.choices[0].message.content.strip()
+        await msg.reply_text(maybe_use_name(user) + reply)
+
+    except Exception:
+        await msg.reply_text("😼 Thoda busy hoon, baad me baat karte")
+
+# ================= WELCOME =================
+
+async def welcome(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.chat_member.new_chat_member.user
+    await context.bot.send_message(
+        update.chat_member.chat.id,
+        f"🎉 Welcome {user.first_name}! 😺\nChill raho & enjoy 🐾"
+    )
+    
 #  ================= MAIN =================
 
 def main():
@@ -1157,6 +1508,7 @@ def main():
     app.add_handler(CommandHandler("games", games))
     app.add_handler(CommandHandler("xp", xp))
     app.add_handler(CommandHandler("me", me))
+    app.add_handler(CommandHandler("lobu", lobu))
     app.add_handler(CommandHandler("daily", daily))
     app.add_handler(CommandHandler("claim", claim))
     app.add_handler(CommandHandler("bal", bal))
@@ -1178,7 +1530,9 @@ def main():
     app.add_handler(CommandHandler("fun", fun))
     app.add_handler(CommandHandler("upgrade", upgrade))
     app.add_handler(CommandHandler("fishlb", fishlb))
-
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(ChatMemberHandler(welcome, ChatMemberHandler.CHAT_MEMBER))
+    
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
 
     print("ðŸ± CATVERSE FULLY UPGRADED & RUNNING...")
