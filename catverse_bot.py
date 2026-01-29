@@ -1304,8 +1304,14 @@ BOT_NAME = "Meowstric 😺"
 OWNER_NAME = "Moon"
 OWNER_USERNAME = "@btw_moon"
 
-BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY","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")
+BOT_TOKEN = os.getenv(
+    "BOT_TOKEN",
+    "7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U"
+)
+GROQ_API_KEY = os.getenv(
+    "GROQ_API_KEY",
+    "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"
+)
 
 ai_client = AsyncGroq(api_key=GROQ_API_KEY)
 
@@ -1316,13 +1322,27 @@ user_moods = {}
 
 HELLO_WORDS = ["hi", "hello", "hey", "hii", "namaste"]
 GREET_WORDS = ["good morning", "gm", "good evening", "good night", "gn"]
+
 RARE_REACTIONS = ["😼", "😂", "👀"]
 
 WELCOME_MESSAGES = [
     "Arre welcome {name} 😺\nAaram se baitho, baat hoti rahegi 🐾",
     "Heyy {name}! 👋\nChill jagah hai, tension mat lo 😼",
     "Meoww {name} 😺\nBas vibe match honi chahiye 🐾",
-    "Welcome welcome {name} 🎉\nYaha thoda fun, thoda chaos 😹"
+    "Welcome welcome {name} 🎉\nYaha thoda fun, thoda chaos 😹",
+]
+
+# 👀 Soft abusive words (block nahi, sirf tone down)
+ABUSIVE_WORDS = [
+    "bc", "mc", "chutiya", "gandu", "madarchod",
+    "bhosdike", "lund", "fuck", "shit"
+]
+
+SOFT_WARNINGS = [
+    "Arre aaram se 😼",
+    "Thoda pyaar se bol na 🐾",
+    "Gussa lag raha, par shaant ho ja 😺",
+    "Baat karte hain, ladte nahi 👀"
 ]
 
 # ================= HELPERS =================
@@ -1331,23 +1351,30 @@ def get_india_time():
     return datetime.now(pytz.timezone("Asia/Kolkata"))
 
 async def human_typing(chat_id, context):
-    await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
-    await asyncio.sleep(random.uniform(0.6, 1.5))
+    await context.bot.send_chat_action(
+        chat_id=chat_id,
+        action=ChatAction.TYPING
+    )
+    await asyncio.sleep(random.uniform(0.8, 1.6))
 
 def remember(chat_id, text):
     chat_memory.setdefault(chat_id, deque(maxlen=10)).append(text)
 
 def detect_mood(text: str):
     t = text.lower()
-    if any(w in t for w in ["sad", "dukhi", "rona", "alone"]):
+    if any(w in t for w in ["sad", "dukhi", "rona", "alone", "miss", "akela"]):
         return "sad"
-    if any(w in t for w in ["gussa", "angry", "irritate"]):
+    if any(w in t for w in ["gussa", "angry", "irritate", "pagal"]):
         return "angry"
     if any(w in t for w in ["lol", "haha", "😂", "🤣"]):
         return "funny"
-    if any(w in t for w in ["happy", "khush", "excited"]):
+    if any(w in t for w in ["happy", "khush", "excited", "mast"]):
         return "happy"
-    return None
+    return "neutral"
+
+def contains_abuse(text: str):
+    t = text.lower()
+    return any(re.search(rf"\b{w}\b", t) for w in ABUSIVE_WORDS)
 
 def maybe_use_name(user):
     return f"{user.first_name}, " if random.random() < 0.35 else ""
@@ -1372,90 +1399,83 @@ async def on_chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = msg.text.strip()
     text_l = text.lower()
 
-    # commands ignore
     if text.startswith("/"):
         return
 
-    # ================= GROUP HANDLING =================
+    # ============ GROUP LOGIC ============
     if chat.type in ("group", "supergroup"):
         bot_username = context.bot.username.lower()
         mentioned = f"@{bot_username}" in text_l
-        casual_hello = any(w in text_l for w in HELLO_WORDS)
+        random_reply = random.random() < 0.08
 
-        if not mentioned and not casual_hello:
+        if not mentioned and not random_reply:
             return
 
         text = text.replace(f"@{bot_username}", "").strip()
         text_l = text.lower()
 
-    # ================= RARE HUMAN REACTION =================
+    # ============ SOFT ABUSE FILTER ============
+    if contains_abuse(text):
+        await human_typing(chat.id, context)
+        await msg.reply_text(random.choice(SOFT_WARNINGS))
+        return
+
+    # ============ RARE REACTION ============
     if random.random() < 0.01:
         await msg.reply_text(random.choice(RARE_REACTIONS))
         return
 
-    # ================= NAME / OWNER =================
-    if any(k in text_l for k in ["tum kaun", "who are you", "your name", "naam"]):
+    # ============ BASIC ============
+    if any(k in text_l for k in ["tum kaun", "who are you", "naam"]):
         await human_typing(chat.id, context)
         await msg.reply_text(
             "Main Meowstric hoon 😺\n"
-            "Bas ek aisa bot jo sunta bhi hai, bolta bhi."
+            "Bot hoon, par vibe real hai."
         )
         return
 
-    if "owner" in text_l or "creator" in text_l:
-        await human_typing(chat.id, context)
-        await msg.reply_text(
-            f"Mera owner {OWNER_NAME} hai.\n"
-            "Kam bolta hai, kaam zyada karta 😼"
-        )
-        return
-
-    # ================= TIME =================
     if "time" in text_l:
         now = get_india_time()
         await human_typing(chat.id, context)
-        await msg.reply_text(f"Abhi {now.strftime('%I:%M %p')} ho raha 🇮🇳")
+        await msg.reply_text(
+            f"Abhi {now.strftime('%I:%M %p')} ho raha 🇮🇳"
+        )
         return
 
-    # ================= GREETING =================
-    if any(g in text_l for g in GREET_WORDS):
-        await human_typing(chat.id, context)
-        await msg.reply_text(random.choice([
-            "Heyy 👋 kya chal raha?",
-            "Haan bolo 😼",
-            "Arre hello 😺"
-        ]))
-        return
-
-    # ================= MOOD =================
+    # ============ MOOD ============
     mood = detect_mood(text)
-    if mood:
-        user_moods[user.id] = mood
+    user_moods[user.id] = mood
 
-    current_mood = user_moods.get(user.id, "neutral")
-
-    # ================= MEMORY =================
     remember(chat.id, f"{user.first_name}: {text}")
     memory_text = "\n".join(chat_memory.get(chat.id, []))
 
-    # ================= AI PROMPT =================
+    # ============ MOOD BASE PROMPT ============
+    mood_instruction = {
+        "sad": "User thoda down hai. Soft, caring, warm tone use karo.",
+        "angry": "User gusse me hai. Calm karo, validate karo, fight nahi.",
+        "happy": "User happy hai. Light masti aur friendly tone.",
+        "funny": "User joke mode me hai. Thoda witty reply.",
+        "neutral": "Normal casual WhatsApp style."
+    }.get(mood, "Casual tone.")
+
     system_prompt = f"""
 You are Meowstric 😺.
-You talk like a real Indian human chatting on WhatsApp.
+You talk like a real Indian human chatting casually.
 
-Rules:
+Style rules:
 • Hinglish
 • 1–2 short lines
 • Natural, imperfect
-• Friendly, warm
-• No lectures
-• Emojis very rare
+• No gyaan, no lectures
+• Emojis kabhi-kabhi
 
-User mood: {current_mood}
+Mood rule:
+{mood_instruction}
 """
 
     try:
         await human_typing(chat.id, context)
+
         res = await ai_client.chat.completions.create(
             model="llama-3.3-70b-versatile",
             messages=[
@@ -1463,7 +1483,7 @@ User mood: {current_mood}
                 {"role": "user", "content": f"{memory_text}\nUser: {text}"}
             ],
             temperature=0.9,
-            max_tokens=70
+            max_tokens=80
         )
 
         reply = res.choices[0].message.content.strip()
