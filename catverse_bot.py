@@ -1904,7 +1904,9 @@ def main():
     app.add_handler(CallbackQueryHandler(panel_handler, pattern="panel_"))
     app.add_handler(CallbackQueryHandler(broadcast_handler, pattern="bc_"))
 
-    app.add_handler(MessageHandler(filters.TEXT & filters.PRIVATE, broadcast_message))
+    app.add_handler(
+    MessageHandler(filters.TEXT & filters.ChatType.PRIVATE, broadcast_message)
+    )
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
 
