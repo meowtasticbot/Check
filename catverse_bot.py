@@ -43,6 +43,13 @@ cats = db["cats"]
 global_state = db["global"]
 leaderboard_history = db["leaderboard_history"]
 
+# ================= DB =================
+
+mongo = MongoClient(MONGO_URI)
+db = mongo["catverse"]
+users = db["users"]
+groups = db["groups"]
+
 # ================= LEVELS =================
 
 LEVELS = [
@@ -1685,6 +1692,162 @@ async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # AI reply
         response = await get_ai_response(chat_id, clean_text, user_id)
         await message.reply_text(response)
+
+# ================= CONFIG =================
+OWNER_ID = 7789325573              # 🔴 apna Telegram user id
+LOGGER_GROUP_ID = -1002024032988  # 🔴 private logger group id
+
+BOT_NAME = "Meowstric 😺"
+
+# ================= HELPERS =================
+def is_admin(user_id: int) -> bool:
+    return user_id == OWNER_ID
+
+def admin_panel():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("📢 Broadcast", callback_data="panel_broadcast")],
+        [InlineKeyboardButton("📊 Stats", callback_data="panel_stats")]
+    ])
+
+def broadcast_buttons():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🐾 Users", callback_data="bc_users")],
+        [InlineKeyboardButton("🐾 Groups", callback_data="bc_groups")]
+    ])
+
+async def log(context, text):
+    await context.bot.send_message(LOGGER_GROUP_ID, text)
+
+# ================= START =================
+async def meow(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+
+    users.update_one(
+        {"_id": user.id},
+        {"$set": {"name": user.first_name}},
+        upsert=True
+    )
+
+    await update.message.reply_text(
+        f"😺 Meow {user.first_name}!\nWelcome to *Catverse* 🐾",
+        parse_mode="Markdown",
+        reply_markup=admin_panel() if is_admin(user.id) else None
+    )
+
+    await log(
+        context,
+        f"🐾 *Bot Started*\n"
+        f"👤 User: {user.first_name}\n"
+        f"🆔 `{user.id}`",
+    )
+
+# ================= CHAT MEMBER LOGGER =================
+async def member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat = update.chat_member.chat
+    user = update.chat_member.from_user
+    new = update.chat_member.new_chat_member.status
+    old = update.chat_member.old_chat_member.status
+
+    if chat.type not in [ChatType.GROUP, ChatType.SUPERGROUP]:
+        return
+
+    # bot added
+    if new == ChatMemberStatus.MEMBER:
+        groups.update_one(
+            {"_id": chat.id},
+            {"$set": {"title": chat.title}},
+            upsert=True
+        )
+
+        invite = chat.invite_link or "No link"
+        await log(
+            context,
+            f"🐱 *Bot Added to Group*\n"
+            f"📛 {chat.title}\n"
+            f"🆔 `{chat.id}`\n"
+            f"👤 Added by: {user.first_name}\n"
+            f"🔗 {invite}"
+        )
+
+    # bot removed
+    if old == ChatMemberStatus.MEMBER and new in [
+        ChatMemberStatus.LEFT, ChatMemberStatus.KICKED
+    ]:
+        groups.delete_one({"_id": chat.id})
+        await log(
+            context,
+            f"😿 *Bot Removed*\n"
+            f"📛 {chat.title}\n"
+            f"👤 By: {user.first_name}"
+        )
+
+# ================= ADMIN PANEL =================
+async def panel_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    if not is_admin(q.from_user.id):
+        await q.message.reply_text("😾 Sirf Cat Owner allowed!")
+        return
+
+    if q.data == "panel_broadcast":
+        await q.message.edit_text(
+            "📢 *Broadcast Panel* 🐾",
+            parse_mode="Markdown",
+            reply_markup=broadcast_buttons()
+        )
+
+    elif q.data == "panel_stats":
+        u = users.count_documents({})
+        g = groups.count_documents({})
+        await q.message.edit_text(
+            f"📊 *Catverse Stats* 😺\n\n"
+            f"👤 Users: *{u}*\n"
+            f"👥 Groups: *{g}*",
+            parse_mode="Markdown"
+        )
+
+# ================= BROADCAST =================
+async def broadcast_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    await q.answer()
+
+    context.user_data["broadcast_mode"] = q.data
+    await q.message.reply_text(
+        "🐾 Meow! Broadcast message bhejo 👇"
+    )
+
+async def broadcast_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_admin(update.effective_user.id):
+        return
+
+    mode = context.user_data.get("broadcast_mode")
+    if not mode:
+        return
+
+    text = update.message.text
+    success = 0
+
+    if mode == "bc_users":
+        for u in users.find():
+            try:
+                await context.bot.send_message(u["_id"], f"🐱 {text}")
+                success += 1
+            except:
+                pass
+
+    if mode == "bc_groups":
+        for g in groups.find():
+            try:
+                await context.bot.send_message(g["_id"], f"🐾 {text}")
+                success += 1
+            except:
+                pass
+
+    context.user_data["broadcast_mode"] = None
+    await update.message.reply_text(
+        f"😺 Broadcast done!\nDelivered: {success}"
+    )
     
 #  ================= MAIN =================
 
@@ -1725,6 +1888,14 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat_handler))
     app.add_handler(CallbackQueryHandler(button_handler))
     app.add_handler(ChatMemberHandler(welcome_new_member, ChatMemberHandler.CHAT_MEMBER))
+    app.add_handler(CommandHandler("meow", meow))
+    app.add_handler(ChatMemberHandler(member_update, ChatMemberHandler.CHAT_MEMBER))
+
+    app.add_handler(CallbackQueryHandler(panel_handler, pattern="panel_"))
+    app.add_handler(CallbackQueryHandler(broadcast_handler, pattern="bc_"))
+
+    app.add_handler(CommandHandler("broadcast", broadcast_message))
+    app.add_handler(CommandHandler("send", broadcast_message))
     
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_chat))
 
