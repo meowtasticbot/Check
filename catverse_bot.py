@@ -1803,7 +1803,8 @@ async def member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if new.user.id != context.bot.id:
         return
 
-    if new.status == ChatMemberStatus.MEMBER:
+    # 🔧 FIX: bot aksar ADMINISTRATOR hota hai
+    if new.status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
         count = await context.bot.get_chat_member_count(chat.id)
 
         groups.update_one(
@@ -1820,7 +1821,7 @@ async def member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"👤 By: {actor.first_name}"
         )
 
-    if old.status == ChatMemberStatus.MEMBER and new.status in (
+    if old.status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR) and new.status in (
         ChatMemberStatus.LEFT, ChatMemberStatus.KICKED
     ):
         groups.delete_one({"_id": chat.id})
@@ -1865,7 +1866,7 @@ async def ubroadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(u["_id"], f"🐱 {text}")
             sent += 1
         except:
-            pass
+            users.delete_one({"_id": u["_id"]})  # 🔧 dead user cleanup
 
     await update.message.reply_text(f"😺 User broadcast done\nSent: {sent}")
 
@@ -1886,7 +1887,7 @@ async def gbroadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await context.bot.send_message(g["_id"], f"🐾 {text}")
             sent += 1
         except:
-            pass
+            groups.delete_one({"_id": g["_id"]})  # 🔧 dead group cleanup
 
     await update.message.reply_text(f"😺 Group broadcast done\nSent: {sent}")
     
