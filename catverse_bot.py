@@ -1470,7 +1470,30 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
         update_user_emotion(user_id, user_text)
     
     user_text_lower = user_text.lower()
-    
+
+    # ================= OWNER QUESTION (FIXED ANSWER) =================
+    if any(q in user_text_lower for q in [
+        "owner", "maalik", "malik", "tumhara owner",
+        "who is your owner", "admin kaun", "creator kaun"
+    ]):
+        return (
+            f"😺 Mera owner hai *Moon* 🌙\n"
+            f"🐾 Telegram: @btw_moon"
+        )
+
+    # ================= CAT NAME CALL (GROUP FUN) =================
+    if any(w in user_text_lower for w in [
+        "meowstric", "meow", "billi", "bilii", "cat"
+    ]):
+        # kabhi-kabhi hi reply
+        if random.random() < 0.3:
+            return random.choice([
+                "😺 Meow~ bula rahe ho?",
+                "🐾 Haan ji, billi present hai!",
+                "😼 Cat mode ON!",
+                "🐱 Kya hua? bula liya?"
+            ])
+            
     # Quick responses
     if any(word in user_text_lower for word in ['hi', 'hello', 'hey', 'namaste', 'hola']):
         if random.random() < 0.4:
