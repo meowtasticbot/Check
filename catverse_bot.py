@@ -47,7 +47,7 @@ leaderboard_history = db["leaderboard_history"]
 
 LEVELS = [
     ("🐱 Kitten", 0),
-    ("😺 Teen Cat", 1000),
+    ("😺 Teen Cat", 100),
     ("😼 Rogue Cat", 5000),
     ("🐯 Alpha Cat", 20000),
     ("👑 Legend Cat", 1600000),
