@@ -1472,14 +1472,20 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
     user_text_lower = user_text.lower()
 
     # ================= QUICK SOFT TRIGGERS (NO FIXED ANSWER) =================
-    cat_called = any(w in user_text_lower for w in [
-        "meowstric", "meow", "billi", "bilii", "cat"
-    ])
+    cat_called = any(
+        w in user_text_lower
+        for w in [
+            "meowstric", "meow", "billi", "bilii", "cat"
+        ]
+    )
 
-    owner_asked = any(q in user_text_lower for [
-        "owner", "maalik", "malik", "tumhara owner",
-        "who is your owner", "admin kaun", "creator kaun"
-    ])
+    owner_asked = any(
+        q in user_text_lower
+        for q in [
+            "owner", "maalik", "malik", "tumhara owner",
+            "who is your owner", "admin kaun", "creator kaun"
+        ]
+    )
             
     # Quick responses
     if any(word in user_text_lower for word in ['hi', 'hello', 'hey', 'namaste', 'hola']):
@@ -1909,4 +1915,4 @@ def main():
     app.run_polling()
 
 if __name__ == "__main__":
-    main()
+    main()*
