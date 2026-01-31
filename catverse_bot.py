@@ -1471,28 +1471,15 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
     
     user_text_lower = user_text.lower()
 
-    # ================= OWNER QUESTION (FIXED ANSWER) =================
-    if any(q in user_text_lower for q in [
+    # ================= QUICK SOFT TRIGGERS (NO FIXED ANSWER) =================
+    cat_called = any(w in user_text_lower for w in [
+        "meowstric", "meow", "billi", "bilii", "cat"
+    ])
+
+    owner_asked = any(q in user_text_lower for [
         "owner", "maalik", "malik", "tumhara owner",
         "who is your owner", "admin kaun", "creator kaun"
-    ]):
-        return (
-            f"😺 Mera owner hai *Moon* 🌙\n"
-            f"🐾 Telegram: @btw_moon"
-        )
-
-    # ================= CAT NAME CALL (GROUP FUN) =================
-    if any(w in user_text_lower for w in [
-        "meowstric", "meow", "billi", "bilii", "cat"
-    ]):
-        # kabhi-kabhi hi reply
-        if random.random() < 0.3:
-            return random.choice([
-                "😺 Meow~ bula rahe ho?",
-                "🐾 Haan ji, billi present hai!",
-                "😼 Cat mode ON!",
-                "🐱 Kya hua? bula liya?"
-            ])
+    ])
             
     # Quick responses
     if any(word in user_text_lower for word in ['hi', 'hello', 'hey', 'namaste', 'hola']):
@@ -1508,9 +1495,26 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
         if random.random() < 0.4:
             return f"{get_emotion('crying', user_id)} {random.choice(QUICK_RESPONSES['sorry'])}"
     
-    # Prepare system prompt
+    # ================= SYSTEM PROMPT =================
     indian_time = get_indian_time()
     current_hour = indian_time.hour
+
+    extra_context = ""
+
+    if cat_called:
+        extra_context += (
+            "User is calling you like a cat (meow/billi/cat/meowstric). "
+            "Reply playfully like a cute cat, Hinglish style. "
+            "Be funny, short, and casual. "
+        )
+
+    if owner_asked:
+        extra_context += (
+            "User is asking about your owner/creator/admin. "
+            "Your owner is Moon (@btw_moon). "
+            "Answer naturally according to how the question is asked. "
+            "Sometimes cute, sometimes funny, sometimes proud. "
+        )
     
     if user_id and user_id in user_emotions and user_emotions[user_id] == "angry":
         system_prompt = (
@@ -1539,7 +1543,7 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
         system_prompt = (
             f"You are a Hinglish (Hindi+English mix) chatbot. {time_greeting} "
             f"Your personality: Emotional, funny, sometimes angry, sometimes crying, mostly happy. "
-            f"Add 1–2 emojis occasionally, only if it fits. "
+            f"Add 1 emojis occasionally, only if it fits. "
             f"Keep replies SHORT (1-2 lines max). Be authentic like a human friend. "
             f"Show emotions naturally. If user asks something complex, give simple answer. "
             f"Current Indian time: {indian_time.strftime('%I:%M %p')}. "
