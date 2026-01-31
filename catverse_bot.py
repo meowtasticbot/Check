@@ -1483,7 +1483,7 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
         q in user_text_lower
         for q in [
             "owner", "maalik", "malik", "tumhara owner",
-            "who is your owner", "admin kaun", "creator kaun"
+            "who is your owner", "baap papa kaun", "creator kaun"
         ]
     )
 
