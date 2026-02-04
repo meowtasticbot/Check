@@ -36,12 +36,16 @@ from telegram.ext import (
 BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U")
 MONGO_URI = os.getenv("MONGO_URI","mongodb+srv://meowstriccat:S8yXruYmreTv0sSp@cluster0.gdat6xv.mongodb.net/?appName=Cluster0")
 OWNER_ID = 7789325573
+LOGGER_GROUP_ID = -1002024032988
+BOT_NAME = "Meowstric 😺"
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
 cats = db["cats"]
 global_state = db["global"]
 leaderboard_history = db["leaderboard_history"]
+users = db["users"]
+groups = db["groups"]
 
 # ================= LEVELS =================
 
@@ -1302,7 +1306,7 @@ OWNER_NAME = "Moon"
 OWNER_USERNAME = "@btw_moon"
 # Direct tokens
 TOKEN = "7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U"
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 # Initialize Groq client
 client = AsyncGroq(api_key=GROQ_API_KEY) if GROQ_API_KEY else None
@@ -1483,7 +1487,7 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
         q in user_text_lower
         for q in [
             "owner", "maalik", "malik", "tumhara owner",
-            "who is your owner", "admin kaun", "creator kaun"
+            "who is your owner", "baap papa kaun", "creator kaun"
         ]
     )
 
@@ -1621,10 +1625,14 @@ async def get_ai_response(chat_id: int, user_text: str, user_id: int = None) -> 
 # ================= BUTTONS =================
 def main_buttons():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💬 DM Toggle", callback_data="toggle_dm")],
-        [InlineKeyboardButton("🎮 Games", callback_data="open_games")],
-        [InlineKeyboardButton("🔄 Update", callback_data="update_bot")],
-        [InlineKeyboardButton("🛡️ Admin", callback_data="open_admin")],
+        [
+            InlineKeyboardButton("💬 DM Toggle", callback_data="toggle_dm"),
+            InlineKeyboardButton("🎮 Games", callback_data="open_games")
+        ],
+        [
+            InlineKeyboardButton("🐱 Catverse Game", callback_data="open_catverse"),
+            InlineKeyboardButton("🛡️ Admin", callback_data="open_admin")
+        ]
     ])
 
 def games_buttons():
@@ -1643,8 +1651,9 @@ def games_buttons():
 # ================= START =================
 async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        f"😺 Hello {update.effective_user.first_name}!\n"
-        f"Welcome to *{BOT_NAME}* 🐾\n\n"
+        f"😺 *Meow {update.effective_user.first_name}!* 🐾\n\n"
+        f"Welcome to *{BOT_NAME}* ✨\n"
+        f"Your fun + games + catverse buddy 😼\n\n"
         f"Choose an option below 👇",
         parse_mode="Markdown",
         reply_markup=main_buttons()
@@ -1653,12 +1662,10 @@ async def start_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ================= CHAT =================
 async def chat_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    chat_id = update.effective_chat.id
 
     if update.effective_chat.type == "private" and not dm_enabled_users.get(user_id, True):
         return
 
-    # yahan tumhara AI reply aayega
     await update.message.reply_text("😼 Meow! Main sun raha hoon...")
 
 # ================= BUTTON HANDLER =================
@@ -1671,7 +1678,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         dm_enabled_users[user_id] = not dm_enabled_users.get(user_id, True)
         status = "ON 😺" if dm_enabled_users[user_id] else "OFF 😴"
         await q.message.edit_text(
-            f"💬 *DM Mode Updated!*\n\nNow you can chat: **{status}** 🐾",
+            f"💬 *DM Mode Updated!*\n\nChat mode: **{status}** 🐾",
             parse_mode="Markdown",
             reply_markup=main_buttons()
         )
@@ -1683,59 +1690,45 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=games_buttons()
         )
 
-    elif data == "update_bot":
+    elif data == "open_catverse":
         await q.message.edit_text(
-            "🔄 *Update Status* 😺\n\n"
-            "• Bot running smooth 🐾\n"
-            "• No bugs detected\n"
-            "• Meowstric happy ✨",
+            "🐱 *CATVERSE GUIDE*\n\n"
+            "Click on /games\n\n"
+            "💰 /daily (DM), /claim (1000+ grp), /bal, /give\n"
+            "⚔️ /rob, /kill, /protect (24h)\n"
+            "🛒 /shop, /inventory, /use\n"
+            "🐟 /fish + chat = XP & events\n"
+            "📊 /meow, /toprich, /topkill, /xp\n\n"
+            "Levels:\n"
+            "🐱 → 😺 → 😼 → 🐯 → 👑",
             parse_mode="Markdown",
             reply_markup=main_buttons()
         )
 
     elif data == "open_admin":
         await q.message.edit_text(
-            "🛡️ **ADMIN COMMANDS 🛡️**\n\n"
-            "Reply to user's message with:\n\n"
-            "• /kick\n"
-            "• /ban\n"
-            "• /mute\n"
-            "• /unmute\n"
-            "• /unban\n\n"
-            "*Bot must be admin!* 😼",
+            "🛡️ *ADMIN COMMANDS*\n\n"
+            "Reply to user message:\n"
+            "• /kick\n• /ban\n• /mute\n• /unmute\n• /unban\n\n"
+            "*Bot must be admin* 😼",
             parse_mode="Markdown",
             reply_markup=main_buttons()
         )
 
     elif data == "game_fun":
-        await q.message.edit_text(
-            "😊 Fun features coming soon 😸",
-            reply_markup=games_buttons()
-        )
+        await q.message.edit_text("😊 Fun coming soon 😸", reply_markup=games_buttons())
 
     elif data == "game_weather":
-        await q.message.edit_text(
-            "🌤️ Use command:\n/weather city",
-            reply_markup=games_buttons()
-        )
+        await q.message.edit_text("🌤️ Use:\n/weather city", reply_markup=games_buttons())
 
     elif data == "game_time":
-        await q.message.edit_text(
-            "🕒 Use:\n/time or /date",
-            reply_markup=games_buttons()
-        )
+        await q.message.edit_text("🕒 Use:\n/time or /date", reply_markup=games_buttons())
 
     elif data == "game_word":
-        await q.message.edit_text(
-            "🎮 Start game using:\n/wordgame",
-            reply_markup=games_buttons()
-        )
+        await q.message.edit_text("🎮 Start with:\n/wordgame", reply_markup=games_buttons())
 
     elif data == "back_main":
-        await q.message.edit_text(
-            "😺 Back to main menu 🐾",
-            reply_markup=main_buttons()
-        )
+        await q.message.edit_text("😺 Main Menu 🐾", reply_markup=main_buttons())
 
     await q.answer()
 
@@ -1897,22 +1890,12 @@ async def admin_commands(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await message.reply_text(random.choice(error_responses))
 
-#cingig
-OWNER_ID = 7789325573
-LOGGER_GROUP_ID = -1002024032988
-BOT_NAME = "Meowstric 😺"
-
-# ================= DB =================
-mongo = MongoClient(MONGO_URI)
-db = mongo["catverse"]
-users = db["users"]
-groups = db["groups"]
-
 # ================= HELPERS =================
 def is_admin(user_id: int) -> bool:
     return user_id == OWNER_ID
 
 async def log(context, text):
+    """Log messages to the logger group."""
     await context.bot.send_message(
         LOGGER_GROUP_ID, text, parse_mode="Markdown"
     )
@@ -1922,6 +1905,7 @@ async def plp(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     existing = users.find_one({"_id": user.id})
 
+    # Insert a new user if not already present
     users.update_one(
         {"_id": user.id},
         {"$setOnInsert": {
@@ -1931,6 +1915,7 @@ async def plp(update: Update, context: ContextTypes.DEFAULT_TYPE):
         upsert=True
     )
 
+    # If new user, log it in the logger GC
     if not existing:
         await log(
             context,
@@ -1939,11 +1924,6 @@ async def plp(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🆔 `{user.id}`"
         )
 
-    await update.message.reply_text(
-        f"😺 Meow {user.first_name}!\nWelcome to *Catverse* 🐾",
-        parse_mode="Markdown"
-    )
-
 # ================= CHAT MEMBER LOGGER =================
 async def member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat = update.chat_member.chat
@@ -1951,30 +1931,43 @@ async def member_update(update: Update, context: ContextTypes.DEFAULT_TYPE):
     new = update.chat_member.new_chat_member
     old = update.chat_member.old_chat_member
 
+    # Ensure only group chats are logged
     if chat.type not in (ChatType.GROUP, ChatType.SUPERGROUP):
         return
 
     if new.user.id != context.bot.id:
         return
 
-    # 🔧 FIX: bot aksar ADMINISTRATOR hota hai
-    if new.status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR):
-        count = await context.bot.get_chat_member_count(chat.id)
+    # Get the group privacy (public/private) and invite link if available
+    if chat.type == ChatType.GROUP:
+        group_info = await context.bot.get_chat(chat.id)
+        try:
+            invite_link = await context.bot.export_chat_invite_link(chat.id)
+            group_privacy = "Public" if group_info.invite_link else "Private"
+        except:
+            invite_link = "No invite link available"
+            group_privacy = "Private"  # If we cannot fetch link, assume private
 
+        # Update group member count and log the action
+        count = await context.bot.get_chat_member_count(chat.id)
         groups.update_one(
             {"_id": chat.id},
-            {"$set": {"title": chat.title, "members": count}},
+            {"$set": {"title": chat.title, "members": count, "privacy": group_privacy, "invite_link": invite_link}},
             upsert=True
         )
 
+        # Log the bot being added to the group with invite link and privacy info
         await log(
             context,
             f"🐱 *Bot Added*\n"
             f"📛 {chat.title}\n"
             f"👥 Members: {count}\n"
-            f"👤 By: {actor.first_name}"
+            f"👤 By: {actor.first_name}\n"
+            f"🔗 Invite Link: {invite_link}\n"
+            f"🌐 Privacy: {group_privacy}"
         )
 
+    # Log if the bot is removed from a group
     if old.status in (ChatMemberStatus.MEMBER, ChatMemberStatus.ADMINISTRATOR) and new.status in (
         ChatMemberStatus.LEFT, ChatMemberStatus.KICKED
     ):
@@ -1991,6 +1984,7 @@ async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         return
 
+    # Get current user and group stats
     u = users.count_documents({})
     g = groups.count_documents({})
     members = sum(x.get("members", 0) for x in groups.find())
@@ -2015,12 +2009,13 @@ async def ubroadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     sent = 0
 
+    # Send the broadcast to all users in the database
     for u in users.find():
         try:
             await context.bot.send_message(u["_id"], f"🐱 {text}")
             sent += 1
         except:
-            users.delete_one({"_id": u["_id"]})  # 🔧 dead user cleanup
+            users.delete_one({"_id": u["_id"]})  # Cleanup dead users
 
     await update.message.reply_text(f"😺 User broadcast done\nSent: {sent}")
 
@@ -2036,14 +2031,16 @@ async def gbroadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     sent = 0
 
+    # Send the broadcast to all groups in the database
     for g in groups.find():
         try:
             await context.bot.send_message(g["_id"], f"🐾 {text}")
             sent += 1
         except:
-            groups.delete_one({"_id": g["_id"]})  # 🔧 dead group cleanup
+            groups.delete_one({"_id": g["_id"]})  # Cleanup dead groups
 
     await update.message.reply_text(f"😺 Group broadcast done\nSent: {sent}")
+
     
 #  ================= MAIN =================
 
