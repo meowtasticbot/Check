@@ -33,7 +33,7 @@ from telegram.ext import (
 
 # ================= CONFIG =================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U")
+BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAGX2O9GITEZbPk_A3x7h7fCML0ULD-nmhY")
 MONGO_URI = os.getenv("MONGO_URI","mongodb+srv://meowstriccat:S8yXruYmreTv0sSp@cluster0.gdat6xv.mongodb.net/?appName=Cluster0")
 OWNER_ID = 7789325573
 LOGGER_GROUP_ID = -1002024032988
@@ -1305,7 +1305,7 @@ BOT_NAME = "Meowstric 😺"
 OWNER_NAME = "Moon"
 OWNER_USERNAME = "@btw_moon"
 # Direct tokens
-TOKEN = "7559754155:AAFufFptzuQpc5QfXsBaIG6EDziBaEOKZ8U"
+TOKEN = "7559754155:AAGX2O9GITEZbPk_A3x7h7fCML0ULD-nmhY"
 GROQ_API_KEY = "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"
 
 # Initialize Groq client
