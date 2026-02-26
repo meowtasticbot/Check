@@ -33,11 +33,17 @@ from telegram.ext import (
 
 # ================= CONFIG =================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN","7559754155:AAGX2O9GITEZbPk_A3x7h7fCML0ULD-nmhY")
-MONGO_URI = os.getenv("MONGO_URI","mongodb+srv://meowstriccat:S8yXruYmreTv0sSp@cluster0.gdat6xv.mongodb.net/?appName=Cluster0")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+MONGO_URI = os.getenv("MONGO_URI")
 OWNER_ID = 7789325573
 LOGGER_GROUP_ID = -1002024032988
 BOT_NAME = "Meowstric 😺"
+
+if not BOT_TOKEN:
+    raise RuntimeError("Missing BOT_TOKEN environment variable")
+
+if not MONGO_URI:
+    raise RuntimeError("Missing MONGO_URI environment variable")
 
 client = MongoClient(MONGO_URI)
 db = client["catverse"]
