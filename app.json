@@ -1,0 +1,41 @@
+{
+  "name": "catverse-telegram-bot",
+  "description": "Telegram game bot deployed as a Heroku worker.",
+  "repository": "https://example.com/replace-with-your-repo.git",
+  "logo": "https://raw.githubusercontent.com/heroku/node-js-getting-started/main/public/node.svg",
+  "keywords": [
+    "telegram",
+    "bot",
+    "python",
+    "worker"
+  ],
+  "stack": "heroku-22",
+  "formation": {
+    "worker": {
+      "quantity": 1,
+      "size": "basic"
+    }
+  },
+  "env": {
+    "BOT_TOKEN": {
+      "description": "Telegram BotFather token",
+      "required": true
+    },
+    "MONGO_URI": {
+      "description": "MongoDB connection string",
+      "required": true
+    },
+    "OWNER_ID": {
+      "description": "Telegram numeric user id for owner/admin commands",
+      "required": false
+    },
+    "LOGGER_GROUP_ID": {
+      "description": "Telegram group id where logs/alerts are sent",
+      "required": false
+    },
+    "BOT_NAME": {
+      "description": "Display name used in bot messages",
+      "required": false
+    }
+  }
+}
